@@ -1,4 +1,4 @@
-import { Container, Text } from 'pixi.js'
+import { Container, Text, Graphics } from 'pixi.js'
 import FD from '../core/factorioData'
 import G from '../common/globals'
 import F from './controls/functions'
@@ -7,17 +7,30 @@ import { Button } from './controls/Button'
 import { colors, styles } from './style'
 
 /*
-    Cols
-    Space   @ 0     +12              ->12
-    Items   @ 12    +(10*(36+2))     ->392
-    Space   @ 392   +12              ->404
-    Width : 12 + (10 * (36 + 2)) + 12 = 404
+    Space Age Support - Enhanced Layout (Ready for Factorio 2.0 Space Age)
 
+    This dialog has been upgraded to handle:
+    - Dynamic group layouts with unlimited item groups
+    - Horizontal scrolling when groups exceed viewport width
+    - Future Space Age item groups (planets, space-platform, etc.)
+    
+    Note: Space Age item groups will appear once data.json is regenerated
+    with the latest Factorio exporter. See SPACE_AGE_DATA_UPDATE.md for details.
+
+    Cols
+    Space   @ 0     +12                  ->12
+    Items   @ 12    +(10*(36+2))         ->392
+    Space   @ 392   +12                  ->404
+    Width : 12 + (10 * (36 + 2)) + 12 = 404 (minimum)
+    
+    Calculated with Space Age groups in mind:
+    Groups can now scroll horizontally if they exceed 520px width capacity
+    
     Rows
     Space   @ 0   +10                ->10
     Title   @ 10  +24                ->34
     Space   @ 34  +12                ->46
-    Groups  @ 46  +68                ->114
+    Groups  @ 46  +68                ->114  (scrollable container added)
     Space   @ 114 +12                ->126
     Items   @ 126 +(8*(36+2))        ->430
     Space   @ 430 +12                ->442
@@ -35,6 +48,12 @@ type InventoryItems = Container<Button<Container>>
 
 /** Inventory Dialog - Displayed to the user if there is a need to select an item */
 export class InventoryDialog extends Dialog {
+    /** Container for Inventory Group Buttons (scrollable) */
+    private readonly m_InventoryGroupsContainer: Container
+
+    /** Mask for group buttons scrolling */
+    private readonly m_GroupsMask: Graphics
+
     /** Container for Inventory Group Buttons */
     private readonly m_InventoryGroups: Container<Button<InventoryItems>>
 
@@ -50,16 +69,40 @@ export class InventoryDialog extends Dialog {
     /** Hovered item for item pointerout check */
     private m_hoveredItem: string
 
+    /** Base width for the dialog */
+    private readonly m_BaseWidth: number = 520
+
+    /** Group buttons scroll position */
+    private m_GroupsScrollX: number = 0
+
+    /** Maximum groups width */
+    private m_MaxGroupsWidth: number = 0
+
     public constructor(
         title = 'Inventory',
         itemsFilter?: string[],
         selectedCallBack?: (selectedItem: string) => void
     ) {
-        super(404, 442, title)
+        // Calculate dynamic dimensions based on content
+        const calculatedWidth = Math.min(520, Math.max(404, 500)) // Start with reasonable defaults
+        const calculatedHeight = 442
+
+        super(calculatedWidth, calculatedHeight, title)
+
+        // Create scrollable groups container with mask
+        this.m_GroupsMask = new Graphics()
+        this.m_GroupsMask.rect(12, 46, calculatedWidth - 24, 68)
+        this.m_GroupsMask.fill({ color: 0xffffff })
+        this.addChild(this.m_GroupsMask)
+
+        this.m_InventoryGroupsContainer = new Container()
+        this.m_InventoryGroupsContainer.position.set(12, 46)
+        this.m_InventoryGroupsContainer.mask = this.m_GroupsMask
+        this.addChild(this.m_InventoryGroupsContainer)
 
         this.m_InventoryGroups = new Container()
-        this.m_InventoryGroups.position.set(12, 46)
-        this.addChild(this.m_InventoryGroups)
+        this.m_InventoryGroups.position.set(0, 0)
+        this.m_InventoryGroupsContainer.addChild(this.m_InventoryGroups)
 
         this.m_InventoryItems = new Container()
         this.m_InventoryItems.position.set(12, 126)
@@ -155,21 +198,25 @@ export class InventoryDialog extends Dialog {
                                     inventoryGroupItems === buttonData
                             }
                         }
+                        
+                        // Auto-scroll to keep button visible
+                        this.scrollGroupButtonIntoView(button.position.x)
                     }
                 })
 
                 this.m_InventoryGroups.addChild(button)
+                this.m_MaxGroupsWidth = (groupIndex + 1) * 70
 
                 groupIndex += 1
             }
         }
 
         const recipePanel = new Container()
-        recipePanel.position.set(0, 442)
+        recipePanel.position.set(0, calculatedHeight)
         this.addChild(recipePanel)
 
         const recipeBackground = F.DrawRectangle(
-            404,
+            calculatedWidth,
             78,
             colors.dialog.background.color,
             colors.dialog.background.alpha,
@@ -185,13 +232,55 @@ export class InventoryDialog extends Dialog {
         this.m_RecipeContainer = new Container()
         this.m_RecipeContainer.position.set(12, 36)
         recipePanel.addChild(this.m_RecipeContainer)
+
+        // Enable mouse wheel scrolling for groups if they overflow
+        this.setupGroupScrolling(calculatedWidth)
+    }
+
+    /** Setup mouse wheel scrolling for group buttons */
+    private setupGroupScrolling(containerWidth: number): void {
+        const scrollableWidth = containerWidth - 24 // Account for padding
+        const visibleHeight = 68
+        const margin = 4
+
+        this.m_InventoryGroupsContainer.interactive = true
+        this.m_InventoryGroupsContainer.on('wheel', (e: any) => {
+            if (this.m_MaxGroupsWidth <= scrollableWidth) return
+
+            e.preventDefault()
+            const scrollAmount = (e.deltaY > 0 ? 1 : -1) * 70 // Scroll by one group width
+            const newScrollX = Math.max(0, Math.min(this.m_GroupsScrollX + scrollAmount, this.m_MaxGroupsWidth - scrollableWidth))
+
+            if (newScrollX !== this.m_GroupsScrollX) {
+                this.m_GroupsScrollX = newScrollX
+                this.m_InventoryGroups.position.x = -this.m_GroupsScrollX
+            }
+        })
+    }
+
+    /** Scroll a group button into view */
+    private scrollGroupButtonIntoView(buttonX: number): void {
+        const containerWidth = this.width - 24
+        const buttonCenter = buttonX + 34 // Button is 68px wide, center is at +34
+        const visibleStart = this.m_GroupsScrollX
+        const visibleEnd = this.m_GroupsScrollX + containerWidth
+
+        if (buttonCenter < visibleStart + 50) {
+            // Scroll left
+            this.m_GroupsScrollX = Math.max(0, buttonCenter - 50)
+        } else if (buttonCenter > visibleEnd - 50) {
+            // Scroll right
+            this.m_GroupsScrollX = Math.min(this.m_MaxGroupsWidth - containerWidth, buttonCenter - containerWidth + 50)
+        }
+
+        this.m_InventoryGroups.position.x = -this.m_GroupsScrollX
     }
 
     /** Override automatically set position of dialog due to additional area for recipe */
     protected override setPosition(): void {
         this.position.set(
             G.app.screen.width / 2 - this.width / 2,
-            G.app.screen.height / 2 - 520 / 2
+            G.app.screen.height / 2 - (this.height + 78) / 2
         )
     }
 

@@ -152,15 +152,35 @@ pub async fn extract(output_dir: &Path, base_factorio_dir: &Path) -> Result<(), 
     tokio::fs::write(mod_dir.join("data-final-fixes.lua"), data).await?;
     tokio::fs::write(scenario_dir.join("control.lua"), script).await?;
 
-    println!("Generating defines.lua");
+    println!("Generating data.json with Space Age support");
 
-    Command::new(factorio_executable)
+    // Use absolute path and run Factorio server with export scenario
+    let exe_path = factorio_executable.canonicalize()
+        .map_err(|e| format!("Cannot find Factorio executable: {}", e))?;
+    let exe_str = exe_path.to_str().ok_or("Invalid executable path")?;
+    let work_dir = base_factorio_dir.canonicalize()
+        .map_err(|e| format!("Cannot canonicalize Factorio directory: {}", e))?;
+    
+    println!("Running Factorio from: {}", work_dir.display());
+    println!("Executable: {}", exe_str);
+    
+    let status = std::process::Command::new(exe_str)
         .args(&["--start-server-load-scenario", "export-data/export-data"])
-        .stdout(std::process::Stdio::null())
-        .spawn()?
-        .wait()
-        .await?;
+        .current_dir(&work_dir)
+        .status()
+        .map_err(|e| {
+            eprintln!("Failed to execute Factorio: {}", e);
+            Box::new(e) as Box<dyn std::error::Error>
+        })?;
 
+    // The Factorio export script uses error("!EXIT!") to signal completion,
+    // which results in exit code 1. This is expected behavior.
+    if !status.success() && status.code() != Some(1) {
+        return Err(format!("Factorio exited with unexpected status: {}", status).into());
+    }
+
+    println!("Factorio data export completed successfully");
+    
     let content = tokio::fs::read_to_string(&extracted_data_path).await?;
     tokio::fs::create_dir_all(&output_dir).await?;
     tokio::fs::write(output_dir.join("data.json"), &content).await?;
@@ -344,12 +364,19 @@ async fn download(
         // "macos" => "osx",
         _ => panic!("unsupported OS"),
     };
-    let url = format!("https://www.factorio.com/get-download/{version}/alpha/{os}?username={username}&token={token}");
+    // For Factorio 2.0+, use 'headless' instead of 'alpha'
+    let release_type = if version.starts_with("2.") { "headless" } else { "alpha" };
+    let url = format!("https://www.factorio.com/get-download/{version}/{release_type}/{os}?username={username}&token={token}");
 
     let client = reqwest::Client::new();
     let res = client.get(&url).send().await?;
 
     if !res.status().is_success() {
+        eprintln!("Failed to download from: {}", url);
+        eprintln!("Status code: {}", res.status());
+        if let Ok(text) = res.text().await {
+            eprintln!("Response: {}", text);
+        }
         panic!("Status code was not successful");
     }
 

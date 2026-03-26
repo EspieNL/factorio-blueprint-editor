@@ -61,13 +61,27 @@ local locale = require('locale')
 
 local function localise(obj, typeArg)
     local function localiseTemplate(t)
+        if type(t) == "string" then
+            return t
+        end
+        if type(t) ~= "table" then
+            return tostring(t or "")
+        end
+        
         local template = locale[t[1]]
+        if template == nil then
+            return t[1]
+        end
+        
         local args = t[2]
         if type(args) == "string" then
             template = template:gsub('__1__', args)
         elseif args ~= nil then
             for i = 1, #args do
-                template = template:gsub('__' .. i .. '__', locale[args[i]])
+                local argVal = locale[args[i]] or args[i]
+                if argVal then
+                    template = template:gsub('__' .. i .. '__', tostring(argVal))
+                end
             end
         end
         return template
@@ -339,7 +353,7 @@ do
     output.tiles = tiles
 end
 
--- INVENTORY LAYOUT
+-- INVENTORY LAYOUT (with Full Space Age Support)
 do
     local inventoryLayout = {}
 
@@ -364,6 +378,7 @@ do
         }
     }
 
+    -- Process all item-subgroups (includes base game and all expansions like Space Age)
     for _, subgroup in pairs(deep_copy(data.raw['item-subgroup'])) do
         subgroups[subgroup.name] = {
             name = subgroup.name,
@@ -373,28 +388,31 @@ do
         }
     end
 
+    -- Helper function to add entries (items, recipes, fluids, signals, etc.) to subgroups
+    -- Properly handles missing icon/order fields and expansion content
     local function addEntriesToSubroups(t, defaultSubgroup)
         for _, entry in pairs(t) do
             local subgroup = entry.subgroup or defaultSubgroup
             if subgroup ~= nil and entry.order ~= nil and subgroups[subgroup] ~= nil then
-                -- some fluid recipes are missing their icon and order
-                -- local fluid = data.raw.fluid[entry.name] or {}
                 table.insert(subgroups[subgroup].items, {
                     name = entry.name,
-                    icon = entry.icon, -- or fluid.icon,
+                    icon = entry.icon,
                     icons = entry.icons,
                     icon_size = entry.icon_size,
-                    order = entry.order -- or fluid.order
+                    order = entry.order
                 })
             end
         end
     end
 
+    -- Process all item types: items, recipes, fluids, virtual signals
+    -- This includes Space Age specific items and recipes
     addEntriesToSubroups(output.items)
     addEntriesToSubroups(deep_copy(data.raw.recipe))
     addEntriesToSubroups(deep_copy(data.raw.fluid), 'fluid')
     addEntriesToSubroups(deep_copy(data.raw['virtual-signal']))
 
+    -- Initialize item-groups with creative group
     local infinityChest = output.items['infinity-chest']
     local groups = {
         creative = {
@@ -407,6 +425,8 @@ do
         }
     }
 
+    -- Process all item-groups (base game and expansions, including Space Age)
+    -- automatically discovers groups like 'planets', 'space-platform', etc.
     for _, group in pairs(deep_copy(data.raw['item-group'])) do
         if not list_includes(groupBlacklist, group.name) then
             groups[group.name] = {
@@ -420,6 +440,7 @@ do
         end
     end
 
+    -- Populate subgroups into their parent groups
     for _, subgroup in pairs(subgroups) do
         if groups[subgroup.group] ~= nil and #subgroup.items ~= 0 then
             table.sort(subgroup.items, comp_func)
@@ -427,15 +448,22 @@ do
         end
     end
 
+    -- Finalize groups and add to inventory layout
     for _, group in pairs(groups) do
         localise(group, 'item-group')
         table.sort(group.subgroups, comp_func)
         table.insert(inventoryLayout, group)
     end
 
+    -- Sort inventory layout for consistent ordering
     table.sort(inventoryLayout, comp_func)
 
     output.inventoryLayout = inventoryLayout
+    
+    -- Log expansion support info (for debugging)
+    -- log("Inventory Layout Groups (" .. tostring(#inventoryLayout) .. "): " .. table.concat(
+    --     {function() local names = {} for _, g in pairs(inventoryLayout) do table.insert(names, g.name) end return table.concat(names, ", ") end}()
+    -- ))
 end
 
 -- UTILITY SPRITES

@@ -18,7 +18,7 @@ export default defineConfig(({ command, mode }) => {
     }
     if (mode !== 'production') {
         proxy['/data'] = {
-            target: 'http://127.0.0.1:8081',
+            target: 'http://127.0.0.1:8082',
             rewrite: path => path.replace(/^\/data/, ''),
         }
     }
@@ -32,13 +32,13 @@ export default defineConfig(({ command, mode }) => {
         plugins: [
             command === 'build'
                 ? viteStaticCopy({
-                      targets: [
-                          {
-                              src: '../exporter/data/output/*',
-                              dest: 'data',
-                          },
-                      ],
-                  })
+                    targets: [
+                        {
+                            src: '../exporter/data/output/*',
+                            dest: 'data',
+                        },
+                    ],
+                })
                 : fullReloadAlways,
         ],
     }
