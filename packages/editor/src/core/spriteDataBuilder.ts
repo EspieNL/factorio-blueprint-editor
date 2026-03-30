@@ -1332,17 +1332,45 @@ function draw_fusion_generator(
 function draw_fusion_reactor(
     e: FusionReactorPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    return () => {
-        const gs = e.graphics_set as { structure?: { layers?: readonly SpriteData[] } | SpriteData }
+    return (data: IDrawData) => {
+        const gs = e.graphics_set as {
+            structure?: { layers?: readonly SpriteData[] } | SpriteData
+            connections_graphics?: Array<{
+                pictures?: { layers?: readonly SpriteData[] } | SpriteData
+            }>
+            direction_to_connections_graphics?: Record<string, readonly number[]>
+        }
+        const out: SpriteData[] = []
+
         const structure = gs.structure
         if (structure) {
             if ('layers' in structure && structure.layers) {
-                return structure.layers
+                out.push(...structure.layers)
+            } else {
+                out.push(structure as SpriteData)
             }
-            return [structure as SpriteData]
         }
 
-        return []
+        // Render the connection port graphics for the current direction
+        const connectionGraphics = gs.connections_graphics
+        const dirToConn = gs.direction_to_connections_graphics
+        if (connectionGraphics && dirToConn) {
+            const dirName = util.getDirName(data.dir)
+            const indices = dirToConn[dirName] || dirToConn['north'] || []
+            for (const idx of indices) {
+                const connEntry = connectionGraphics[idx - 1]
+                if (!connEntry) continue
+                const pictures = connEntry.pictures
+                if (!pictures) continue
+                if ('layers' in pictures && pictures.layers) {
+                    out.push(...pictures.layers)
+                } else {
+                    out.push(pictures as SpriteData)
+                }
+            }
+        }
+
+        return out
     }
 }
 function draw_gate(e: GatePrototype): (data: IDrawData) => readonly SpriteData[] {

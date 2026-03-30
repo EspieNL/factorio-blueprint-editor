@@ -300,7 +300,7 @@ function CreateIconWithAmount(
 function CreateQualityIcon(quality = 'normal', size = 20): Container {
     const qualityData = getQuality(quality)
 
-    if (qualityData.icon || qualityData.icons) {
+    if ((qualityData.icon || qualityData.icons) && qualityData.draw_sprite_by_default !== false) {
         return createIconFromPrototypeData(qualityData, size, true)
     }
 
