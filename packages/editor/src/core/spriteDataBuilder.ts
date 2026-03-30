@@ -139,6 +139,15 @@ export interface ExtendedSpriteData extends SpriteData {
 
 const generatorCache = new Map<string, (data: IDrawData) => readonly ExtendedSpriteData[]>()
 
+function normalizeLayer(layer: SpriteData): SpriteData {
+    if (!layer) return layer
+    const l = layer as SpriteData & { filenames?: readonly string[] }
+    if (!l.filename && l.filenames && l.filenames.length > 0) {
+        l.filename = l.filenames[0] as SpriteData['filename']
+    }
+    return layer
+}
+
 function getSpriteData(data: IDrawData): readonly ExtendedSpriteData[] {
     if (generatorCache.has(data.name)) {
         return generatorCache.get(data.name)(data)
@@ -146,8 +155,14 @@ function getSpriteData(data: IDrawData): readonly ExtendedSpriteData[] {
 
     const entity = FD.entities[data.name]
     const generator = (data: IDrawData): readonly ExtendedSpriteData[] => {
+        let graphics: readonly SpriteData[]
+        try {
+            graphics = generateGraphics(entity)(data)
+        } catch {
+            graphics = []
+        }
         return [
-            ...generateGraphics(entity)(data),
+            ...graphics.map(normalizeLayer),
             ...generateCovers(entity, data),
             ...generateConnection(entity, data),
         ]
@@ -404,14 +419,20 @@ function getBeltSprites(
     positionGrid?: PositionGrid,
     start = true,
     end = true,
-    forceStraight = false
+    forceStraight = false,
+    animationFrameOffset = 0
 ): readonly SpriteData[] {
     const parts = []
+
+    function pushBeltPart(type: BeltShape, shift?: IPoint | readonly [number, number]): void {
+        const basePart = getBeltSpriteFromData(bas, direction, type, animationFrameOffset)
+        parts.push(shift ? addToShift(shift, basePart) : basePart)
+    }
 
     if (positionGrid) {
         const conn = getConnForPos(positionGrid, position, direction, forceStraight)
 
-        parts.push(getBeltSpriteFromData(bas, direction, conn.curve))
+        pushBeltPart(conn.curve)
 
         if (start) {
             let spawn = true
@@ -430,12 +451,7 @@ function getBeltSprites(
             }
 
             if (spawn) {
-                parts.push(
-                    addToShift(
-                        util.rotatePointBasedOnDir([0, 1], direction),
-                        getBeltSpriteFromData(bas, direction, 'start')
-                    )
-                )
+                pushBeltPart('start', util.rotatePointBasedOnDir([0, 1], direction))
             }
         }
 
@@ -455,33 +471,18 @@ function getBeltSprites(
             }
 
             if (spawn) {
-                parts.push(
-                    addToShift(
-                        util.rotatePointBasedOnDir([0, -1], direction),
-                        getBeltSpriteFromData(bas, direction, 'end')
-                    )
-                )
+                pushBeltPart('end', util.rotatePointBasedOnDir([0, -1], direction))
             }
         }
     } else {
-        parts.push(getBeltSpriteFromData(bas, direction, 'straight'))
+        pushBeltPart('straight')
 
         if (start) {
-            parts.push(
-                addToShift(
-                    util.rotatePointBasedOnDir([0, 1], direction),
-                    getBeltSpriteFromData(bas, direction, 'start')
-                )
-            )
+            pushBeltPart('start', util.rotatePointBasedOnDir([0, 1], direction))
         }
 
         if (end) {
-            parts.push(
-                addToShift(
-                    util.rotatePointBasedOnDir([0, -1], direction),
-                    getBeltSpriteFromData(bas, direction, 'end')
-                )
-            )
+            pushBeltPart('end', util.rotatePointBasedOnDir([0, -1], direction))
         }
     }
 
@@ -571,9 +572,27 @@ function getBeltSprites(
     function getBeltSpriteFromData(
         bas: TransportBeltAnimationSetWithCorners,
         dir: number,
-        type: BeltShape
+        type: BeltShape,
+        frameOffset: number
     ): SpriteData {
-        return duplicateAndSetPropertyUsing(bas.animation_set, 'y', 'size', getIndex() - 1)
+        const animationSet = bas.animation_set
+        const out = duplicateAndSetPropertyUsing(animationSet, 'y', 'size', getIndex() - 1)
+
+        if (frameOffset > 0) {
+            const frameCount = animationSet.frame_count || 1
+            const lineLength = animationSet.line_length || frameCount
+            const size =
+                out.width ||
+                (Array.isArray(out.size) ? out.size[0] : out.size)
+
+            if (size) {
+                const offsetFrame = frameOffset % frameCount
+                out.x = (out.x || 0) + (offsetFrame % lineLength) * size
+                out.y = (out.y || 0) + Math.floor(offsetFrame / lineLength) * size
+            }
+        }
+
+        return out
 
         function getIndex(): number {
             switch (type) {
@@ -639,6 +658,19 @@ function getBeltSprites(
             }
         }
     }
+
+}
+
+function getBeltAnimationFrameOffset(
+    beltAnimationSet: {
+        alternate?: boolean
+        animation_set: { frame_count?: number }
+    },
+    position: IPoint,
+    direction?: number
+): number {
+    if (!beltAnimationSet.alternate) return 0
+    return 0
 }
 
 function getAnimation(a: Animation4Way, dir: number): Animation {
@@ -824,7 +856,7 @@ function draw_accumulator(e: AccumulatorPrototype): (data: IDrawData) => readonl
 function draw_agricultural_tower(
     e: AgriculturalTowerPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return (data: IDrawData) => getAnimation(e.graphics_set.animation, data.dir).layers
 }
 function draw_ammo_turret(e: AmmoTurretPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => [
@@ -869,7 +901,7 @@ function draw_arithmetic_combinator(
         if (data.operator) {
             out.push(
                 operatorToSpriteData(data.operator as ArithmeticOperation)[
-                    util.getDirName(data.dir)
+                util.getDirName(data.dir)
                 ]
             )
         }
@@ -912,11 +944,51 @@ function draw_assembling_machine(
     e: AssemblingMachinePrototype
 ): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
-        if (e.graphics_set.always_draw_idle_animation) {
-            return e.graphics_set.idle_animation.layers
-        } else {
-            const out = [...getAnimation(e.graphics_set.animation, data.dir).layers]
+        const out: SpriteData[] = []
+        const graphicsSet = e.graphics_set as {
+            always_draw_idle_animation?: boolean
+            idle_animation?: Animation & { layers?: readonly SpriteData[] }
+            animation?: Animation4Way
+            working_visualisations?: Array<
+                {
+                    always_draw?: boolean
+                    draw_in_states?: readonly string[]
+                    animation?: Animation | Animation4Way
+                    north_animation?: Animation
+                    east_animation?: Animation
+                    south_animation?: Animation
+                    west_animation?: Animation
+                }
+            >
+        }
 
+        if (graphicsSet.always_draw_idle_animation && graphicsSet.idle_animation?.layers) {
+            out.push(...graphicsSet.idle_animation.layers)
+        } else if (graphicsSet.animation) {
+            const baseAnimation = getAnimation(graphicsSet.animation, data.dir)
+            out.push(...(baseAnimation.layers ? baseAnimation.layers : [baseAnimation]))
+        }
+
+        for (const vis of graphicsSet.working_visualisations || []) {
+            const drawInIdle = vis.draw_in_states?.includes('idle')
+            if (!vis.always_draw && !drawInIdle) continue
+
+            const dirName = util.getDirName(data.dir)
+            const dirAnimation = vis[`${dirName}_animation` as keyof typeof vis] as
+                | undefined
+                | Animation
+            const animation = dirAnimation || vis.animation
+            if (!animation) continue
+
+            const resolvedAnimation =
+                'north' in animation || 'east' in animation || 'south' in animation || 'west' in animation
+                    ? getAnimation(animation as Animation4Way, data.dir)
+                    : (animation as Animation)
+
+            out.push(...(resolvedAnimation.layers ? resolvedAnimation.layers : [resolvedAnimation]))
+        }
+
+        {
             const fbs = getFluidBoxes(
                 e,
                 data.assemblerHasFluidInputs || data.assemblerHasFluidOutputs
@@ -942,15 +1014,19 @@ function draw_assembling_machine(
                     )
                 }
             }
-
-            return out
         }
+
+        return out
     }
 }
 function draw_asteroid_collector(
     e: AsteroidCollectorPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return (data: IDrawData) => {
+        const gs = e.graphics_set as { animation?: { layers?: readonly SpriteData[] } }
+        if (gs.animation?.layers) return gs.animation.layers
+        return []
+    }
 }
 function draw_beacon(e: BeaconPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
@@ -1030,12 +1106,20 @@ function draw_burner_generator(
     throw new Error('Not implemented!')
 }
 function draw_cargo_bay(e: CargoBayPrototype): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return () => {
+        const gs = e.graphics_set as { picture?: { layers?: readonly SpriteData[] } }
+        if (gs.picture?.layers) return gs.picture.layers
+        return []
+    }
 }
 function draw_cargo_landing_pad(
     e: CargoLandingPadPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return () => {
+        const gs = e.graphics_set as { picture?: { layers?: readonly SpriteData[] } }
+        if (gs.picture?.layers) return gs.picture.layers
+        return []
+    }
 }
 function draw_cargo_wagon(e: CargoWagonPrototype): (data: IDrawData) => readonly SpriteData[] {
     throw new Error('Not implemented!')
@@ -1168,12 +1252,22 @@ function draw_furnace(e: FurnacePrototype): (data: IDrawData) => readonly Sprite
 function draw_fusion_generator(
     e: FusionGeneratorPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return (data: IDrawData) => {
+        const dirName = util.getDirName(data.dir)
+        const gs = e.graphics_set as Record<string, { animation?: { layers?: readonly SpriteData[] } }>
+        const dirGs = gs[`${dirName}_graphics_set`]
+        if (dirGs?.animation?.layers) return dirGs.animation.layers
+        return []
+    }
 }
 function draw_fusion_reactor(
     e: FusionReactorPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return () => {
+        const gs = e.graphics_set as { structure?: { layers?: readonly SpriteData[] } }
+        if (gs.structure?.layers) return gs.structure.layers
+        return []
+    }
 }
 function draw_gate(e: GatePrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
@@ -1510,15 +1604,22 @@ function draw_loader(e: LoaderPrototype): (data: IDrawData) => readonly SpriteDa
         const isInput = data.dirType === 'input'
         const dir = isInput ? data.dir : (data.dir + 8) % 16
         const offset = util.rotatePointBasedOnDir([0, 0.5], dir)
+        const beltPosition = util.sumprod(data.position, offset)
+        const frameOffset = getBeltAnimationFrameOffset(
+            e.belt_animation_set,
+            beltPosition,
+            data.dir
+        )
 
         const beltParts = getBeltSprites(
             e.belt_animation_set,
-            data.positionGrid ? util.sumprod(data.position, offset) : offset,
+            data.positionGrid ? beltPosition : offset,
             data.dir,
             data.positionGrid,
             isInput,
             !isInput,
-            true
+            true,
+            frameOffset
         ).map(sprite => addToShift(util.rotatePointBasedOnDir([0, 0.5], dir), sprite))
 
         let mainBelt = beltParts[0]
@@ -1787,7 +1888,7 @@ function draw_selector_combinator(
         if (data.operator) {
             out.push(
                 operatorToSpriteData(data.operator as SelectorCombinatorOperation)[
-                    util.getDirName(data.dir)
+                util.getDirName(data.dir)
                 ]
             )
         }
@@ -1800,31 +1901,49 @@ function draw_solar_panel(e: SolarPanelPrototype): (data: IDrawData) => readonly
 function draw_space_platform_hub(
     e: SpacePlatformHubPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return () => {
+        const gs = e.graphics_set as { picture?: { layers?: readonly SpriteData[] } }
+        if (gs.picture?.layers) return gs.picture.layers
+        return []
+    }
 }
 function draw_splitter(e: SplitterPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
         const b0Offset = util.rotatePointBasedOnDir([-0.5, 0], data.dir)
         const b1Offset = util.rotatePointBasedOnDir([0.5, 0], data.dir)
+        const b0Position = util.sumprod(data.position, b0Offset)
+        const b1Position = util.sumprod(data.position, b1Offset)
+        const frameOffset0 = getBeltAnimationFrameOffset(
+            e.belt_animation_set,
+            b0Position,
+            data.dir
+        )
+        const frameOffset1 = getBeltAnimationFrameOffset(
+            e.belt_animation_set,
+            b1Position,
+            data.dir
+        )
 
         const belt0Parts = getBeltSprites(
             e.belt_animation_set,
-            data.positionGrid ? util.sumprod(data.position, b0Offset) : b0Offset,
+            data.positionGrid ? b0Position : b0Offset,
             data.dir,
             data.positionGrid,
             true,
             true,
-            true
+            true,
+            frameOffset0
         ).map(sd => addToShift(b0Offset, sd))
 
         const belt1Parts = getBeltSprites(
             e.belt_animation_set,
-            data.positionGrid ? util.sumprod(data.position, b1Offset) : b1Offset,
+            data.positionGrid ? b1Position : b1Offset,
             data.dir,
             data.positionGrid,
             true,
             true,
-            true
+            true,
+            frameOffset1
         ).map(sd => addToShift(b1Offset, sd))
 
         const dir = util.getDirName(data.dir)
@@ -1843,7 +1962,12 @@ function draw_storage_tank(e: StorageTankPrototype): (data: IDrawData) => readon
     ]
 }
 function draw_thruster(e: ThrusterPrototype): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return () => {
+        const gs = e.graphics_set as { animation?: SpriteData & { layers?: readonly SpriteData[] } }
+        if (gs.animation?.layers) return gs.animation.layers
+        if (gs.animation) return [gs.animation as SpriteData]
+        return []
+    }
 }
 function draw_train_stop(e: TrainStopPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
@@ -1864,6 +1988,12 @@ function draw_transport_belt(
     e: TransportBeltPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
+        const frameOffset = getBeltAnimationFrameOffset(
+            e.belt_animation_set,
+            data.position,
+            data.dir
+        )
+
         if (data.generateConnector && data.positionGrid) {
             const connIndex = getBeltWireConnectionIndex(data.positionGrid, data.position, data.dir)
             const patchIndex = (() => {
@@ -1887,7 +2017,16 @@ function draw_transport_belt(
             }
 
             sprites.push(
-                ...getBeltSprites(e.belt_animation_set, data.position, data.dir, data.positionGrid)
+                ...getBeltSprites(
+                    e.belt_animation_set,
+                    data.position,
+                    data.dir,
+                    data.positionGrid,
+                    true,
+                    true,
+                    false,
+                    frameOffset
+                )
             )
 
             let frame = e.connector_frame_sprites.frame_main.sheet
@@ -1896,7 +2035,18 @@ function draw_transport_belt(
 
             return sprites
         }
-        return [...getBeltSprites(e.belt_animation_set, data.position, data.dir, data.positionGrid)]
+        return [
+            ...getBeltSprites(
+                e.belt_animation_set,
+                data.position,
+                data.dir,
+                data.positionGrid,
+                true,
+                true,
+                false,
+                frameOffset
+            ),
+        ]
     }
 }
 function draw_turret(e: TurretPrototype): (data: IDrawData) => readonly SpriteData[] {
@@ -1908,6 +2058,11 @@ function draw_underground_belt(
     return (data: IDrawData) => {
         const isInput = data.dirType === 'input'
         const dir = isInput ? data.dir : (data.dir + 8) % 16
+        const frameOffset = getBeltAnimationFrameOffset(
+            e.belt_animation_set,
+            data.position,
+            data.dir
+        )
 
         const beltParts = getBeltSprites(
             e.belt_animation_set,
@@ -1916,7 +2071,8 @@ function draw_underground_belt(
             data.positionGrid,
             isInput,
             !isInput,
-            true
+            true,
+            frameOffset
         )
 
         let mainBelt = beltParts[0]
@@ -1986,8 +2142,8 @@ function draw_underground_belt(
                         ? structure.direction_in_side_loading.sheet
                         : structure.direction_out_side_loading.sheet
                     : isInput
-                      ? structure.direction_in.sheet
-                      : structure.direction_out.sheet,
+                        ? structure.direction_in.sheet
+                        : structure.direction_out.sheet,
                 'x',
                 'width',
                 dir / 4
