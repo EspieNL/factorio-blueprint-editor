@@ -1,0 +1,1 @@
+import '../../../packages/laravel-factorio-blueprint-editor/resources/js/editor.ts';

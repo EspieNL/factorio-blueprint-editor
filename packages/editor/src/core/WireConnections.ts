@@ -428,6 +428,7 @@ export class WireConnections extends EventEmitter<WireConnectionsEvents> {
         interface IPole extends IPoint {
             entityNumber: number
             name: string
+            quality?: string
         }
 
         const poles = this.bp.entities
@@ -435,6 +436,7 @@ export class WireConnections extends EventEmitter<WireConnectionsEvents> {
             .map<IPole>(e => ({
                 entityNumber: e.entityNumber,
                 name: e.name,
+                quality: e.quality,
                 x: e.position.x,
                 y: e.position.y,
             }))
@@ -452,8 +454,8 @@ export class WireConnections extends EventEmitter<WireConnectionsEvents> {
                         pole0,
                         pole1,
                         Math.min(
-                            getMaxWireDistance(FD.entities[pole0.name]),
-                            getMaxWireDistance(FD.entities[pole1.name])
+                            getMaxWireDistance(FD.entities[pole0.name], pole0.quality),
+                            getMaxWireDistance(FD.entities[pole1.name], pole1.quality)
                         )
                     )
                 )

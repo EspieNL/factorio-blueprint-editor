@@ -17,6 +17,8 @@ macro_rules! get_env_var {
     };
 }
 
+const EXPANSION_MODS: [&str; 3] = ["space-age", "quality", "elevated-rails"];
+
 #[derive(Deserialize)]
 struct Info {
     // name: String,
@@ -26,6 +28,35 @@ struct Info {
     // contact: String,
     // homepage: String,
     // dependencies: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ModPortalReleaseInfo {
+    factorio_version: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ModPortalRelease {
+    download_url: String,
+    file_name: String,
+    version: String,
+    info_json: Option<ModPortalReleaseInfo>,
+}
+
+#[derive(Deserialize)]
+struct ModPortalMod {
+    releases: Vec<ModPortalRelease>,
+}
+
+#[derive(Deserialize, serde::Serialize)]
+struct ModList {
+    mods: Vec<ModListEntry>,
+}
+
+#[derive(Deserialize, serde::Serialize, Clone)]
+struct ModListEntry {
+    name: String,
+    enabled: bool,
 }
 
 async fn get_info(path: &Path) -> Result<Info, Box<dyn Error>> {
@@ -134,6 +165,46 @@ async fn generate_locale(factorio_data: &PathBuf) -> Result<String, Box<dyn Erro
     Ok(format!("return {{{}}}", content))
 }
 
+fn resolve_data_root(path: PathBuf) -> PathBuf {
+    if path.join("data").is_dir() {
+        path.join("data")
+    } else {
+        path
+    }
+}
+
+fn get_graphics_data_roots(base_factorio_dir: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![base_factorio_dir.join("data")];
+
+    if let Ok(path) = env::var("FACTORIO_GRAPHICS_DATA_PATH") {
+        roots.push(resolve_data_root(PathBuf::from(path)));
+    }
+
+    roots
+}
+
+fn asset_prefix(path: &str) -> &str {
+    path.strip_prefix("__")
+        .and_then(|rest| rest.split_once("__/").map(|(prefix, _)| prefix))
+        .unwrap_or("unknown")
+}
+
+fn resolve_asset_path(asset_path: &str, data_roots: &[PathBuf]) -> Option<PathBuf> {
+    let relative_path = if asset_path.starts_with("__") {
+        let mut parts = asset_path.splitn(2, '/');
+        let prefix = parts.next().unwrap_or("");
+        let rel = parts.next().unwrap_or("");
+        PathBuf::from(prefix.trim_matches('_')).join(rel)
+    } else {
+        PathBuf::from(asset_path)
+    };
+
+    data_roots
+        .iter()
+        .map(|root| root.join(&relative_path))
+        .find(|path| path.is_file())
+}
+
 pub async fn extract(output_dir: &Path, base_factorio_dir: &Path) -> Result<(), Box<dyn Error>> {
     let factorio_data = base_factorio_dir.join("data");
     let mod_dir = base_factorio_dir.join("mods/export-data");
@@ -185,6 +256,12 @@ pub async fn extract(output_dir: &Path, base_factorio_dir: &Path) -> Result<(), 
     tokio::fs::create_dir_all(&output_dir).await?;
     tokio::fs::write(output_dir.join("data.json"), &content).await?;
 
+    let graphics_data_roots = get_graphics_data_roots(base_factorio_dir);
+    println!("Asset roots:");
+    for root in &graphics_data_roots {
+        println!("  - {}", root.display());
+    }
+
     let metadata_path = output_dir.join("metadata.json");
 
     let res = tokio::fs::read_to_string(&metadata_path).await;
@@ -205,15 +282,45 @@ pub async fn extract(output_dir: &Path, base_factorio_dir: &Path) -> Result<(), 
         .map(|cap| cap[1].to_string())
         .collect();
 
+    let mut missing_assets = Vec::new();
     let file_paths = file_paths
         .into_iter()
-        .map(|s| {
-            let in_path =
-                factorio_data.join(s.replace("__core__", "core").replace("__base__", "base"));
+        .filter_map(|s| {
+            let in_path = resolve_asset_path(&s, &graphics_data_roots);
             let out_path = output_dir.join(s.replace(".png", ".basis").as_str());
-            (in_path, out_path)
+
+            match in_path {
+                Some(in_path) => Some((in_path, out_path)),
+                None => {
+                    missing_assets.push(s);
+                    None
+                }
+            }
         })
         .collect::<Vec<(PathBuf, PathBuf)>>();
+
+    if !missing_assets.is_empty() {
+        let missing_modules = missing_assets
+            .iter()
+            .map(|path| asset_prefix(path))
+            .collect::<HashSet<_>>();
+        let preview = missing_assets
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n  - ");
+
+        let warning = format!(
+            "Missing {} image assets while generating .basis textures. Missing modules: {}.\n\nSet FACTORIO_GRAPHICS_DATA_PATH to a full Factorio installation directory (or its data directory) that contains the graphics files, then rerun the exporter for complete rendering coverage.\n\nExamples:\n  - /path/to/Factorio\n  - /path/to/Factorio/data\n\nFirst missing assets:\n  - {}",
+            missing_assets.len(),
+            missing_modules.into_iter().collect::<Vec<_>>().join(", "),
+            preview
+        );
+
+        println!("WARNING: {}", warning);
+        tokio::fs::write(output_dir.join("missing-assets.txt"), &warning).await?;
+    }
 
     let progress = ProgressBar::new(file_paths.len() as u64);
     progress.set_style(
@@ -328,6 +435,9 @@ pub async fn download_factorio(
     factorio_version: &str,
 ) -> Result<(), Box<dyn Error>> {
     let info_path = base_factorio_dir.join("data/base/info.json");
+    let has_bundled_expansion = EXPANSION_MODS
+        .iter()
+        .all(|mod_name| base_factorio_dir.join("data").join(mod_name).is_dir());
 
     let same_version = get_info(&info_path)
         .await
@@ -346,17 +456,183 @@ pub async fn download_factorio(
         let username = get_env_var!("FACTORIO_USERNAME")?;
         let token = get_env_var!("FACTORIO_TOKEN")?;
 
-        download(factorio_version, &username, &token, data_dir).await?;
+        download_release(factorio_version, &username, &token, data_dir, "alpha").await?;
     }
+
+    let username = get_env_var!("FACTORIO_USERNAME")?;
+    let token = get_env_var!("FACTORIO_TOKEN")?;
+
+    if !has_bundled_expansion {
+        println!("Downloading Factorio Space Age expansion package (if available)");
+        if let Err(err) =
+            download_release(factorio_version, &username, &token, data_dir, "expansion").await
+        {
+            println!(
+                "Could not download expansion package: {}. Continuing with available data.",
+                err
+            );
+        }
+    }
+
+    ensure_expansion_mods(base_factorio_dir, factorio_version, &username, &token).await?;
 
     Ok(())
 }
 
-async fn download(
+fn set_mod_enabled(mods: &mut Vec<ModListEntry>, mod_name: &str, enabled: bool) {
+    if let Some(existing) = mods.iter_mut().find(|m| m.name == mod_name) {
+        existing.enabled = enabled;
+    } else {
+        mods.push(ModListEntry {
+            name: mod_name.to_string(),
+            enabled,
+        });
+    }
+}
+
+fn is_release_compatible(release_factorio_version: Option<&String>, factorio_version: &str) -> bool {
+    let Some(v) = release_factorio_version else {
+        return false;
+    };
+
+    v == factorio_version
+        || v == "2.0"
+        || v.starts_with("2.0.")
+        || (factorio_version.starts_with("2.0") && v.starts_with("2.0"))
+}
+
+async fn remove_mod_archives(mods_dir: &Path, mod_name: &str) -> Result<(), Box<dyn Error>> {
+    let mut entries = tokio::fs::read_dir(mods_dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(&format!("{mod_name}_")) && name.ends_with(".zip") {
+            tokio::fs::remove_file(entry.path()).await?;
+        }
+    }
+    Ok(())
+}
+
+fn with_auth_query(url: &str, username: &str, token: &str) -> String {
+    if url.contains('?') {
+        format!("{url}&username={username}&token={token}")
+    } else {
+        format!("{url}?username={username}&token={token}")
+    }
+}
+
+async fn download_mod_release(
+    mod_name: &str,
+    factorio_version: &str,
+    username: &str,
+    token: &str,
+    mods_dir: &Path,
+) -> Result<bool, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let api_url = format!("https://mods.factorio.com/api/mods/{mod_name}/full");
+    let authed_api_url = with_auth_query(&api_url, username, token);
+    let mod_info: ModPortalMod = client
+        .get(&authed_api_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+
+    let preferred = mod_info
+        .releases
+        .iter()
+        .rev()
+        .find(|release| {
+            is_release_compatible(
+                release
+                    .info_json
+                    .as_ref()
+                    .and_then(|info| info.factorio_version.as_ref()),
+                factorio_version,
+            )
+        });
+
+    let Some(preferred) = preferred else {
+        println!(
+            "No Factorio {factorio_version}-compatible releases found for mod {mod_name}, skipping"
+        );
+        return Ok(false);
+    };
+
+    let url = format!("https://mods.factorio.com{}", preferred.download_url);
+    let authed_url = with_auth_query(&url, username, token);
+    let out_path = mods_dir.join(&preferred.file_name);
+
+    println!(
+        "Downloading expansion mod {mod_name} {} ({})",
+        preferred.version, preferred.file_name
+    );
+
+    let bytes = client
+        .get(&authed_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
+
+    tokio::fs::write(out_path, &bytes).await?;
+
+    Ok(true)
+}
+
+async fn ensure_expansion_mods(
+    base_factorio_dir: &Path,
+    factorio_version: &str,
+    username: &str,
+    token: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mods_dir = base_factorio_dir.join("mods");
+    tokio::fs::create_dir_all(&mods_dir).await?;
+
+    let mod_list_path = mods_dir.join("mod-list.json");
+    let mut mod_list = match tokio::fs::read_to_string(&mod_list_path).await {
+        Ok(contents) => serde_json::from_str::<ModList>(&contents).unwrap_or(ModList { mods: vec![] }),
+        Err(_) => ModList { mods: vec![] },
+    };
+
+    for mod_name in EXPANSION_MODS {
+        let bundled_mod_path = base_factorio_dir.join("data").join(mod_name);
+        if bundled_mod_path.is_dir() {
+            set_mod_enabled(&mut mod_list.mods, mod_name, true);
+            continue;
+        }
+
+        // Always refresh managed expansion archives so stale 1.1 zips don't break 2.0 exports.
+        remove_mod_archives(&mods_dir, mod_name).await?;
+
+        let mod_available =
+            download_mod_release(mod_name, factorio_version, username, token, &mods_dir).await?;
+
+        if mod_available {
+            set_mod_enabled(&mut mod_list.mods, mod_name, true);
+        } else {
+            // Keep the export pipeline running even if a paid expansion is unavailable.
+            set_mod_enabled(&mut mod_list.mods, mod_name, false);
+        }
+    }
+
+    set_mod_enabled(&mut mod_list.mods, "base", true);
+    set_mod_enabled(&mut mod_list.mods, "export-data", true);
+
+    let serialized = serde_json::to_string_pretty(&mod_list)?;
+    tokio::fs::write(&mod_list_path, format!("\n{}\n", serialized)).await?;
+
+    Ok(())
+}
+
+async fn download_release(
     version: &str,
     username: &str,
     token: &str,
     out_dir: &Path,
+    release_type: &str,
 ) -> Result<(), Box<dyn Error>> {
     let os = match std::env::consts::OS {
         "linux" => "linux64",
@@ -364,8 +640,6 @@ async fn download(
         // "macos" => "osx",
         _ => panic!("unsupported OS"),
     };
-    // For Factorio 2.0+, use 'headless' instead of 'alpha'
-    let release_type = if version.starts_with("2.") { "headless" } else { "alpha" };
     let url = format!("https://www.factorio.com/get-download/{version}/{release_type}/{os}?username={username}&token={token}");
 
     let client = reqwest::Client::new();

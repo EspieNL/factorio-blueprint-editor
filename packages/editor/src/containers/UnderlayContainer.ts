@@ -1,5 +1,11 @@
 import { Sprite, Container, Texture, AlphaFilter, ColorSource } from 'pixi.js'
-import FD, { getEnergySource, hasModuleFunctionality } from '../core/factorioData'
+import FD, {
+    getBeaconSupplyAreaDistance,
+    getElectricPoleSupplyAreaDistance,
+    getEnergySource,
+    getMiningDrillRange,
+    hasModuleFunctionality,
+} from '../core/factorioData'
 import { IPoint } from '../types'
 import { VisualizationArea } from './VisualizationArea'
 
@@ -31,7 +37,10 @@ export class UnderlayContainer extends Container {
         this.addChild(this.logistics0, this.logistics1, this.poles, this.beacons, this.drills)
     }
 
-    private static getDataForVisualizationArea(name: string): IVisualizationData[] {
+    private static getDataForVisualizationArea(
+        name: string,
+        quality?: string
+    ): IVisualizationData[] {
         const ed = FD.entities[name]
 
         if (name === 'roboport') {
@@ -58,7 +67,7 @@ export class UnderlayContainer extends Container {
             return [
                 {
                     type: 'poles',
-                    radius: ed.supply_area_distance,
+                    radius: getElectricPoleSupplyAreaDistance(ed, quality),
                     color: 0x3755d9,
                     alpha: VisualizationArea.ALPHA,
                 },
@@ -68,17 +77,17 @@ export class UnderlayContainer extends Container {
             return [
                 {
                     type: 'beacons',
-                    radius: ed.supply_area_distance + 1,
+                    radius: getBeaconSupplyAreaDistance(ed, quality) + 1,
                     color: 0xd9c037,
                     alpha: VisualizationArea.ALPHA,
                 },
             ]
         }
-        if (name === 'electric-mining-drill') {
+        if (ed.type === 'mining-drill') {
             return [
                 {
                     type: 'drills',
-                    radius: ed.resource_searching_radius,
+                    radius: getMiningDrillRange(ed, quality),
                     color: 0x4ead9f,
                     alpha: VisualizationArea.ALPHA,
                 },
@@ -130,8 +139,9 @@ export class UnderlayContainer extends Container {
         this.active = []
     }
 
-    public create(entityName: string, position: IPoint): VisualizationArea {
-        const sprites = UnderlayContainer.getDataForVisualizationArea(entityName).map(data => {
+    public create(entityName: string, position: IPoint, quality?: string): VisualizationArea {
+        const sprites = UnderlayContainer.getDataForVisualizationArea(entityName, quality).map(
+            data => {
             const sprite = new Sprite(Texture.WHITE)
             sprite.tint = data.color
             sprite.alpha = data.alpha
@@ -142,7 +152,8 @@ export class UnderlayContainer extends Container {
 
             this[data.type].addChild(sprite)
             return sprite
-        })
+            }
+        )
         if (sprites.length === 0) return this.dummyVisualizationArea
 
         return new VisualizationArea(sprites)

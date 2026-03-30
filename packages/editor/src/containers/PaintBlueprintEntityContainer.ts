@@ -30,7 +30,11 @@ export class PaintBlueprintEntityContainer {
         this.bp = bp
         this.entity = entity
 
-        this.visualizationArea = this.bpc.underlayContainer.create(this.entity.name, this.position)
+        this.visualizationArea = this.bpc.underlayContainer.create(
+            this.entity.name,
+            this.position,
+            this.entity.quality
+        )
 
         this.entitySprites = EntitySprite.getParts(
             this.entity,
@@ -123,7 +127,15 @@ export class PaintBlueprintEntityContainer {
         const position = this.entityPosition
         const direction = this.entity.direction
 
-        if (this.bpc.bp.fastReplaceEntity(this.entity.name, direction, position)) return
+        if (
+            this.bpc.bp.fastReplaceEntity(
+                this.entity.name,
+                direction,
+                position,
+                this.entity.quality
+            )
+        )
+            return
 
         const snEnt = this.bpc.bp.entityPositionGrid.checkSameEntityAndDifferentDirection(
             this.entity.name,
@@ -132,6 +144,24 @@ export class PaintBlueprintEntityContainer {
         )
         if (snEnt) {
             snEnt.direction = direction
+            snEnt.quality = this.entity.quality
+            return
+        }
+
+        const sameEnt = this.bpc.bp.entityPositionGrid.getEntityAtPosition(position)
+        const sameDirectionType =
+            this.entity.type === 'input' || this.entity.type === 'output'
+                ? sameEnt?.directionType === this.entity.type
+                : true
+        if (
+            sameEnt &&
+            sameEnt.name === this.entity.name &&
+            sameEnt.position.x === position.x &&
+            sameEnt.position.y === position.y &&
+            sameEnt.direction === direction &&
+            sameDirectionType
+        ) {
+            sameEnt.quality = this.entity.quality
             return
         }
 

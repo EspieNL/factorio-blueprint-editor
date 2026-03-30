@@ -130,6 +130,169 @@ function getModulesFor(entityName: string): ModulePrototype[] {
     )
 }
 
+const FALLBACK_QUALITIES: Record<string, QualityPrototypeData> = {
+    normal: {
+        name: 'normal',
+        level: 0,
+        order: 'a',
+        color: { r: 0.7, g: 0.7, b: 0.7, a: 1 },
+        icon: '__base__/graphics/icons/quality-normal.png',
+        icon_size: 64,
+        localised_name: 'Normal',
+        draw_sprite_by_default: false,
+        hidden: true,
+    },
+    uncommon: {
+        name: 'uncommon',
+        level: 1,
+        order: 'b',
+        color: [43 / 255, 165 / 255, 61 / 255, 1],
+        icon: '__quality__/graphics/icons/quality-uncommon.png',
+        icon_size: 64,
+        localised_name: 'Uncommon',
+    },
+    rare: {
+        name: 'rare',
+        level: 2,
+        order: 'c',
+        color: [25 / 255, 104 / 255, 178 / 255, 1],
+        icon: '__quality__/graphics/icons/quality-rare.png',
+        icon_size: 64,
+        localised_name: 'Rare',
+    },
+    epic: {
+        name: 'epic',
+        level: 3,
+        order: 'd',
+        color: [137 / 255, 0, 178 / 255, 1],
+        icon: '__quality__/graphics/icons/quality-epic.png',
+        icon_size: 64,
+        localised_name: 'Epic',
+    },
+    legendary: {
+        name: 'legendary',
+        level: 5,
+        order: 'e',
+        color: [178 / 255, 104 / 255, 0, 1],
+        icon: '__quality__/graphics/icons/quality-legendary.png',
+        icon_size: 64,
+        localised_name: 'Legendary',
+    },
+}
+
+function clampQualityBonus(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value))
+}
+
+function getEffectiveQualities(): Record<string, QualityPrototypeData> {
+    if (FD.qualities && Object.keys(FD.qualities).length > 0) {
+        return FD.qualities
+    }
+    return FALLBACK_QUALITIES
+}
+
+export function normalizeQualityId(quality?: string): string | undefined {
+    if (!quality) return undefined
+
+    const qualities = getEffectiveQualities()
+    if (qualities[quality]) return quality
+
+    const dePrefixed = quality.replace(/^quality-/, '')
+    if (qualities[dePrefixed]) return dePrefixed
+
+    const byPrototypeName = Object.values(qualities).find(q => q.name === quality)
+    if (byPrototypeName) return byPrototypeName.name
+
+    const byPrototypeNameDePrefixed = Object.values(qualities).find(q => q.name === dePrefixed)
+    if (byPrototypeNameDePrefixed) return byPrototypeNameDePrefixed.name
+
+    return dePrefixed
+}
+
+export function getQuality(quality: string = 'normal'): QualityPrototypeData {
+    const qualities = getEffectiveQualities()
+    const normalized = normalizeQualityId(quality)
+    return qualities[normalized] || FALLBACK_QUALITIES[normalized] || FALLBACK_QUALITIES.normal
+}
+
+export function getOrderedQualities(): QualityPrototypeData[] {
+    const effectiveQualities = Object.values(getEffectiveQualities())
+
+    const byName = new Map<string, QualityPrototypeData>()
+    for (const quality of effectiveQualities) {
+        if (!quality?.name) continue
+        byName.set(quality.name, quality)
+    }
+
+    const qualities =
+        byName.size > 0 ? [...byName.values()] : Object.values(FALLBACK_QUALITIES)
+
+    return qualities.sort((a, b) => {
+        const orderA = a.order || a.name || ''
+        const orderB = b.order || b.name || ''
+        return orderA.localeCompare(orderB)
+    })
+}
+
+export function getCraftingMachineSpeedMultiplierForQuality(quality?: string): number {
+    if (!quality || quality === 'normal') return 1
+
+    const qualityData = getQuality(quality)
+    return (
+        qualityData.crafting_machine_speed_multiplier ??
+        qualityData.default_multiplier ??
+        1 + 0.3 * qualityData.level
+    )
+}
+
+export function getQualityLevel(quality?: string): number {
+    return getQuality(quality || 'normal').level || 0
+}
+
+export function getElectricPoleSupplyAreaDistance(
+    e: EntityWithOwnerPrototype,
+    quality?: string
+): number {
+    if (e.type !== 'electric-pole') return 0
+
+    const e_resolved = e as ElectricPolePrototype
+    const baseDistance = e_resolved.supply_area_distance || 0
+
+    if (baseDistance <= 0) return baseDistance
+
+    const qualityData = getQuality(quality || 'normal')
+    return baseDistance + (qualityData.electric_pole_supply_area_distance_bonus ?? qualityData.level)
+}
+
+export function getBeaconSupplyAreaDistance(
+    e: EntityWithOwnerPrototype,
+    quality?: string
+): number {
+    if (e.type !== 'beacon') return 0
+
+    const e_resolved = e as BeaconPrototype & { quality_affects_supply_area_distance?: boolean }
+    const baseDistance = e_resolved.supply_area_distance || 0
+
+    if (!e_resolved.quality_affects_supply_area_distance) return baseDistance
+
+    const qualityData = getQuality(quality || 'normal')
+    const bonus = qualityData.beacon_supply_area_distance_bonus ?? qualityData.level
+
+    return clampQualityBonus(baseDistance + bonus, 0, 64)
+}
+
+export function getMiningDrillRange(e: EntityWithOwnerPrototype, quality?: string): number {
+    if (e.type !== 'mining-drill') return 0
+
+    const e_resolved = e as MiningDrillPrototype & { quality_affects_mining_radius?: boolean }
+    const baseRadius = e_resolved.resource_searching_radius || 0
+
+    if (!e_resolved.quality_affects_mining_radius) return baseRadius
+
+    const qualityData = getQuality(quality || 'normal')
+    return baseRadius + (qualityData.mining_drill_mining_radius_bonus ?? qualityData.level)
+}
+
 export function recipeSupportsModule(recipe: string, module: ModulePrototype): boolean {
     const r = FD.recipes[recipe]
     if (r.allowed_module_categories && !r.allowed_module_categories.includes(module.category))
@@ -403,11 +566,15 @@ function getInnerFluidBoxes(
     }
 }
 
-export function getMaxWireDistance(e: EntityWithOwnerPrototype): number {
+export function getMaxWireDistance(e: EntityWithOwnerPrototype, quality?: string): number {
     switch (e.type) {
         case 'electric-pole': {
             const e_resolved = e as ElectricPolePrototype
-            return e_resolved.maximum_wire_distance || 0
+            const qualityData = getQuality(quality || 'normal')
+            return (
+                (e_resolved.maximum_wire_distance || 0) +
+                (qualityData.electric_pole_wire_reach_bonus ?? qualityData.level * 2)
+            )
         }
         case 'power-switch': {
             const e_resolved = e as PowerSwitchPrototype
@@ -492,7 +659,14 @@ export function getMaxWireDistance(e: EntityWithOwnerPrototype): number {
     }
 }
 
-export function mapBoundingBox(bb: BoundingBox): [[number, number], [number, number]] {
+export function mapBoundingBox(bb?: BoundingBox): [[number, number], [number, number]] {
+    if (!bb) {
+        // Fallback to a 1x1 footprint when prototype bounds are unavailable.
+        return [
+            [-0.5, -0.5],
+            [0.5, 0.5],
+        ]
+    }
     const mapP = (p: MapPosition): [number, number] =>
         Array.isArray(p) ? [p[0], p[1]] : [p.x, p.y]
     if (Array.isArray(bb)) {
@@ -503,7 +677,11 @@ export function mapBoundingBox(bb: BoundingBox): [[number, number], [number, num
 }
 
 export function getEntitySize(e: EntityWithOwnerPrototype, dir: number = 0): IPoint {
-    const bb = mapBoundingBox(e.collision_box)
+    if (e.type === 'rail-support') {
+        return { x: 4, y: 4 }
+    }
+
+    const bb = mapBoundingBox(e.collision_box || e.selection_box)
     const w = e.tile_width || Math.ceil(Math.abs(bb[0][0]) + Math.abs(bb[1][0]))
     const h = e.tile_height || Math.ceil(Math.abs(bb[0][1]) + Math.abs(bb[1][1]))
     if (w === h) {
@@ -747,6 +925,7 @@ const FD: {
     recipes: Record<string, RecipePrototype>
     entities: Record<string, EntityWithOwnerPrototype>
     tiles: Record<string, TilePrototype>
+    qualities: Record<string, QualityPrototypeData>
     inventoryLayout: InventoryLayoutGroup[]
     utilitySprites: UtilitySprites
     utilityConstants: UtilityConstants
@@ -766,6 +945,17 @@ export function loadData(str: string): void {
     FD.recipes = data.recipes
     FD.entities = data.entities
     FD.tiles = data.tiles
+    FD.qualities =
+        data.qualities && Object.keys(data.qualities).length > 0
+            ? data.qualities
+            : FALLBACK_QUALITIES
+
+    // Some exports key qualities by internal IDs while consumers use prototype names.
+    for (const quality of Object.values(FD.qualities)) {
+        if (quality?.name && !FD.qualities[quality.name]) {
+            FD.qualities[quality.name] = quality
+        }
+    }
     FD.inventoryLayout = data.inventoryLayout
     FD.utilitySprites = data.utilitySprites
     FD.utilityConstants = data.utilityConstants
@@ -860,6 +1050,30 @@ export interface Color {
 
 export interface ColorWithAlpha extends Color {
     a: number
+}
+
+export interface QualityPrototypeData {
+    name: string
+    level: number
+    order: string
+    color:
+        | ColorStruct
+        | readonly [number, number, number]
+        | readonly [number, number, number, number]
+    icon?: string
+    icons?: IconData[]
+    icon_size?: number
+    localised_name?: string
+    hidden?: boolean
+    draw_sprite_by_default?: boolean
+    default_multiplier?: number
+    crafting_machine_speed_multiplier?: number
+    crafting_machine_energy_usage_multiplier?: number
+    electric_pole_wire_reach_bonus?: number
+    electric_pole_supply_area_distance_bonus?: number
+    beacon_supply_area_distance_bonus?: number
+    mining_drill_mining_radius_bonus?: number
+    logistic_cell_charging_station_count_bonus?: number
 }
 
 export interface InventoryLayoutGroup {

@@ -19,6 +19,7 @@ import { Sprite as SpriteData } from 'factorio:prototype'
 export class OverlayContainer extends Container {
     private readonly bpc: BlueprintContainer
     private readonly entityInfos = new Container()
+    private readonly qualityInfos = new Container()
     private readonly cursorBoxes = new Container()
     private readonly undergroundLines = new Container()
     private readonly selectionArea = new Graphics()
@@ -29,7 +30,29 @@ export class OverlayContainer extends Container {
         super()
         this.bpc = bpc
 
-        this.addChild(this.entityInfos, this.cursorBoxes, this.undergroundLines, this.selectionArea)
+        this.addChild(
+            this.entityInfos,
+            this.qualityInfos,
+            this.cursorBoxes,
+            this.undergroundLines,
+            this.selectionArea
+        )
+    }
+
+    public static createQualityInfo(entity: Entity, position: IPoint): Container {
+        if (!entity.quality || entity.quality === 'normal') {
+            return
+        }
+
+        const qualityInfo = F.CreateQualityIcon(entity.quality, 14)
+
+        // Match in-world quality marker expectations by pinning to the bottom-left corner.
+        qualityInfo.position.set(-entity.size.x * 16 + 10, entity.size.y * 16 - 10)
+
+        const container = new Container()
+        container.addChild(qualityInfo)
+        container.position.set(position.x, position.y)
+        return container
     }
 
     public static createEntityInfo(entity: Entity, position: IPoint): Container {
@@ -280,12 +303,19 @@ export class OverlayContainer extends Container {
             entityInfo.addChild(arrows)
         }
 
-        if (entity.type === 'mining-drill' && entity.name !== 'pumpjack') {
+        const outputVector = (
+            entity.entityData as { vector_to_place_result?: readonly [number, number] }
+        ).vector_to_place_result
+        const shouldShowOutputArrow =
+            (entity.type === 'mining-drill' && entity.name !== 'pumpjack') ||
+            entity.name === 'recycler'
+
+        if (shouldShowOutputArrow && outputVector) {
             const arrows = new Container()
             arrows.addChild(
                 createArrow({
-                    x: entity.entityData.vector_to_place_result[0] * 64,
-                    y: entity.entityData.vector_to_place_result[1] * 64 + 18,
+                    x: outputVector[0] * 64,
+                    y: outputVector[1] * 64 + 18,
                 })
             )
             arrows.rotation = entity.direction * Math.PI * 0.125
@@ -375,6 +405,14 @@ export class OverlayContainer extends Container {
         if (entityInfo !== undefined) {
             this.entityInfos.addChild(entityInfo)
             return entityInfo
+        }
+    }
+
+    public createQualityInfo(entity: Entity, position: IPoint): Container {
+        const qualityInfo = OverlayContainer.createQualityInfo(entity, position)
+        if (qualityInfo !== undefined) {
+            this.qualityInfos.addChild(qualityInfo)
+            return qualityInfo
         }
     }
 

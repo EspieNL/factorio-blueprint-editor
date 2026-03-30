@@ -353,6 +353,20 @@ do
     output.tiles = tiles
 end
 
+-- QUALITIES
+do
+    local qualities = {}
+
+    if data.raw.quality then
+        for _, quality in pairs(deep_copy(data.raw.quality)) do
+            localise(quality, 'quality')
+            qualities[quality.name] = quality
+        end
+    end
+
+    output.qualities = qualities
+end
+
 -- INVENTORY LAYOUT (with Full Space Age Support)
 do
     local inventoryLayout = {}

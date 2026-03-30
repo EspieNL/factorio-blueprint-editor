@@ -10,6 +10,12 @@ import { CursorBoxSpecification } from 'factorio:prototype'
 export class EntityContainer {
     public static readonly mappings: Map<number, EntityContainer> = new Map()
 
+    public static refreshAllEntityInfos(): void {
+        for (const container of EntityContainer.mappings.values()) {
+            container.redrawEntityInfo()
+        }
+    }
+
     private static _updateGroups: Map<string, Set<string>>
     private static get updateGroups(): Map<string, Set<string>> {
         if (!EntityContainer._updateGroups) {
@@ -20,6 +26,7 @@ export class EntityContainer {
 
     private visualizationArea: VisualizationArea
     private entityInfo: Container
+    private qualityInfo: Container
     private entitySprites: EntitySprite[] = []
     /** This is only a reference */
     private cursorBoxContainer: Container
@@ -33,8 +40,13 @@ export class EntityContainer {
 
         EntityContainer.mappings.set(this.m_Entity.entityNumber, this)
 
-        this.visualizationArea = G.BPC.underlayContainer.create(this.m_Entity.name, this.position)
+        this.visualizationArea = G.BPC.underlayContainer.create(
+            this.m_Entity.name,
+            this.position,
+            this.m_Entity.quality
+        )
         this.entityInfo = G.BPC.overlayContainer.createEntityInfo(this.m_Entity, this.position)
+        this.qualityInfo = G.BPC.overlayContainer.createQualityInfo(this.m_Entity, this.position)
 
         this.redraw(false, sort)
         if (sort) {
@@ -72,6 +84,7 @@ export class EntityContainer {
 
             this.updateUndergroundLine()
             this.redrawEntityInfo()
+            this.redrawQualityInfo()
             G.BPC.wiresContainer.update(this.m_Entity.entityNumber)
             this.visualizationArea.moveTo(this.position)
         }
@@ -81,6 +94,11 @@ export class EntityContainer {
             if (this.m_Entity.type === 'beacon') {
                 this.redraw()
             }
+        }
+
+        const onQualityChange = (): void => {
+            this.redrawEntityInfo()
+            this.redrawQualityInfo()
         }
 
         const onEntityDestroy = (): void => {
@@ -99,6 +117,9 @@ export class EntityContainer {
             if (this.entityInfo !== undefined) {
                 this.entityInfo.destroy()
             }
+            if (this.qualityInfo !== undefined) {
+                this.qualityInfo.destroy()
+            }
         }
 
         this.m_Entity.on('recipe', onRecipeChange)
@@ -106,6 +127,7 @@ export class EntityContainer {
         this.m_Entity.on('directionType', onDirectionTypeChange)
         this.m_Entity.on('position', onPositionChange)
         this.m_Entity.on('modules', onModulesChange)
+        this.m_Entity.on('quality', onQualityChange)
 
         this.m_Entity.on('filters', this.redrawEntityInfo, this)
         this.m_Entity.on('splitterInputPriority', this.redrawEntityInfo, this)
@@ -119,6 +141,7 @@ export class EntityContainer {
             this.m_Entity.off('directionType', onDirectionTypeChange)
             this.m_Entity.off('position', onPositionChange)
             this.m_Entity.off('modules', onModulesChange)
+            this.m_Entity.off('quality', onQualityChange)
 
             this.m_Entity.off('filters', this.redrawEntityInfo, this)
             this.m_Entity.off('splitterInputPriority', this.redrawEntityInfo, this)
@@ -135,29 +158,37 @@ export class EntityContainer {
                     'transport-belt',
                     'fast-transport-belt',
                     'express-transport-belt',
+                    'turbo-transport-belt',
                     'splitter',
                     'fast-splitter',
                     'express-splitter',
+                    'turbo-splitter',
                     'underground-belt',
                     'fast-underground-belt',
                     'express-underground-belt',
+                    'turbo-underground-belt',
                     'loader',
                     'fast-loader',
                     'express-loader',
+                    'turbo-loader',
                 ],
                 updates: [
                     'transport-belt',
                     'fast-transport-belt',
                     'express-transport-belt',
+                    'turbo-transport-belt',
                     'splitter',
                     'fast-splitter',
                     'express-splitter',
+                    'turbo-splitter',
                     'underground-belt',
                     'fast-underground-belt',
                     'express-underground-belt',
+                    'turbo-underground-belt',
                     'loader',
                     'fast-loader',
                     'express-loader',
+                    'turbo-loader',
                 ],
             },
             {
@@ -272,6 +303,13 @@ export class EntityContainer {
         }
 
         G.UI.updateEntityInfoPanel(this.m_Entity)
+    }
+
+    private redrawQualityInfo(): void {
+        if (this.qualityInfo !== undefined) {
+            this.qualityInfo.destroy()
+        }
+        this.qualityInfo = G.BPC.overlayContainer.createQualityInfo(this.m_Entity, this.position)
     }
 
     public pointerOverEventHandler(): void {

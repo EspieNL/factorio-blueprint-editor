@@ -155,9 +155,10 @@ function getSpriteData(data: IDrawData): readonly ExtendedSpriteData[] {
 
     const entity = FD.entities[data.name]
     const generator = (data: IDrawData): readonly ExtendedSpriteData[] => {
-        let graphics: readonly SpriteData[]
+        let graphics: readonly SpriteData[] = []
         try {
-            graphics = generateGraphics(entity)(data)
+            const generated = generateGraphics(entity)(data)
+            graphics = generated || []
         } catch {
             graphics = []
         }
@@ -273,7 +274,12 @@ function generateCovers(e: EntityWithOwnerPrototype, data: IDrawData): readonly 
 
             let needs_cover = force_cover || !isConnected()
             if (needs_cover) {
-                let temp = fb.pipe_covers[util.getDirName(dir)].layers[0]
+                const coverSet = fb.pipe_covers?.[util.getDirName(dir)]
+                const coverLayer = coverSet?.layers?.[0]
+                if (!coverLayer) {
+                    continue
+                }
+                let temp = coverLayer
                 temp = addToShift(offset, util.duplicate(temp))
                 output.push(temp)
             }
@@ -1220,22 +1226,22 @@ function draw_electric_turret(
 function draw_elevated_curved_rail_a(
     e: ElevatedCurvedRailAPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_elevated_curved_rail_b(
     e: ElevatedCurvedRailBPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_elevated_half_diagonal_rail(
     e: ElevatedHalfDiagonalRailPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_elevated_straight_rail(
     e: ElevatedStraightRailPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_fluid_turret(e: FluidTurretPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => [
@@ -1247,16 +1253,79 @@ function draw_fluid_wagon(e: FluidWagonPrototype): (data: IDrawData) => readonly
     throw new Error('Not implemented!')
 }
 function draw_furnace(e: FurnacePrototype): (data: IDrawData) => readonly SpriteData[] {
-    return () => e.graphics_set.animation.layers
+    return (data: IDrawData) => {
+        const out: SpriteData[] = []
+        const graphicsSet = e.graphics_set as {
+            animation?: Animation | Animation4Way
+            working_visualisations?: Array<
+                {
+                    always_draw?: boolean
+                    draw_in_states?: readonly string[]
+                    animation?: Animation | Animation4Way
+                    north_animation?: Animation
+                    east_animation?: Animation
+                    south_animation?: Animation
+                    west_animation?: Animation
+                }
+            >
+        }
+
+        if (graphicsSet.animation) {
+            const resolvedAnimation =
+                'north' in graphicsSet.animation ||
+                    'east' in graphicsSet.animation ||
+                    'south' in graphicsSet.animation ||
+                    'west' in graphicsSet.animation
+                    ? getAnimation(graphicsSet.animation as Animation4Way, data.dir)
+                    : (graphicsSet.animation as Animation)
+
+            out.push(...(resolvedAnimation.layers ? resolvedAnimation.layers : [resolvedAnimation]))
+        }
+
+        for (const vis of graphicsSet.working_visualisations || []) {
+            const drawInIdle = vis.draw_in_states?.includes('idle')
+            if (!vis.always_draw && !drawInIdle) continue
+
+            const dirName = util.getDirName(data.dir)
+            const dirAnimation = vis[`${dirName}_animation` as keyof typeof vis] as
+                | undefined
+                | Animation
+            const animation = dirAnimation || vis.animation
+            if (!animation) continue
+
+            const resolvedAnimation =
+                'north' in animation ||
+                    'east' in animation ||
+                    'south' in animation ||
+                    'west' in animation
+                    ? getAnimation(animation as Animation4Way, data.dir)
+                    : (animation as Animation)
+
+            out.push(...(resolvedAnimation.layers ? resolvedAnimation.layers : [resolvedAnimation]))
+        }
+
+        return out
+    }
 }
 function draw_fusion_generator(
     e: FusionGeneratorPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {
         const dirName = util.getDirName(data.dir)
-        const gs = e.graphics_set as Record<string, { animation?: { layers?: readonly SpriteData[] } }>
+        const gs = e.graphics_set as Record<
+            string,
+            { animation?: { layers?: readonly SpriteData[] } | SpriteData }
+        >
         const dirGs = gs[`${dirName}_graphics_set`]
-        if (dirGs?.animation?.layers) return dirGs.animation.layers
+
+        const animation = dirGs?.animation
+        if (animation) {
+            if ('layers' in animation && animation.layers) {
+                return animation.layers
+            }
+            return [animation as SpriteData]
+        }
+
         return []
     }
 }
@@ -1264,8 +1333,15 @@ function draw_fusion_reactor(
     e: FusionReactorPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
     return () => {
-        const gs = e.graphics_set as { structure?: { layers?: readonly SpriteData[] } }
-        if (gs.structure?.layers) return gs.structure.layers
+        const gs = e.graphics_set as { structure?: { layers?: readonly SpriteData[] } | SpriteData }
+        const structure = gs.structure
+        if (structure) {
+            if ('layers' in structure && structure.layers) {
+                return structure.layers
+            }
+            return [structure as SpriteData]
+        }
+
         return []
     }
 }
@@ -1701,6 +1777,56 @@ function draw_mining_drill(e: MiningDrillPrototype): (data: IDrawData) => readon
 
                 return [...layers0, ...layers1]
             }
+
+        default:
+            return (data: IDrawData) => {
+                const out: SpriteData[] = []
+                const dirName = util.getDirName(data.dir)
+                const graphicsSet = e.graphics_set as {
+                    animation?: Animation4Way
+                    working_visualisations?: Array<
+                        {
+                            always_draw?: boolean
+                            draw_in_states?: readonly string[]
+                            animation?: Animation | Animation4Way
+                            north_animation?: Animation
+                            east_animation?: Animation
+                            south_animation?: Animation
+                            west_animation?: Animation
+                        }
+                    >
+                }
+
+                if (graphicsSet.animation) {
+                    const baseAnimation = getAnimation(graphicsSet.animation, data.dir)
+                    out.push(...(baseAnimation.layers ? baseAnimation.layers : [baseAnimation]))
+                }
+
+                for (const vis of graphicsSet.working_visualisations || []) {
+                    const drawInIdle = vis.draw_in_states?.includes('idle')
+                    if (!vis.always_draw && !drawInIdle) continue
+
+                    const dirAnimation = vis[`${dirName}_animation` as keyof typeof vis] as
+                        | undefined
+                        | Animation
+                    const animation = dirAnimation || vis.animation
+                    if (!animation) continue
+
+                    const resolvedAnimation =
+                        'north' in animation ||
+                            'east' in animation ||
+                            'south' in animation ||
+                            'west' in animation
+                            ? getAnimation(animation as Animation4Way, data.dir)
+                            : (animation as Animation)
+
+                    out.push(
+                        ...(resolvedAnimation.layers ? resolvedAnimation.layers : [resolvedAnimation])
+                    )
+                }
+
+                return out
+            }
     }
 }
 function draw_offshore_pump(e: OffshorePumpPrototype): (data: IDrawData) => readonly SpriteData[] {
@@ -1788,7 +1914,7 @@ function draw_radar(e: RadarPrototype): (data: IDrawData) => readonly SpriteData
     return () => e.pictures.layers
 }
 function draw_rail_ramp(e: RailRampPrototype): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_rail_signal_base(
     e: RailSignalBasePrototype
@@ -1819,7 +1945,24 @@ function draw_rail_signal_base(
     }
 }
 function draw_rail_support(e: RailSupportPrototype): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return (data: IDrawData) => {
+        const structureLayers =
+            ((e.graphics_set as unknown as { structure?: { layers?: readonly SpriteData[] } })
+                .structure?.layers as readonly SpriteData[] | undefined) || []
+
+        const dir = Math.floor(((data.dir || 0) % 16) / 2)
+
+        return structureLayers.map(layer => {
+            const layerEx = layer as SpriteData & {
+                line_length?: number
+                direction_count?: number
+            }
+            const lineLength = layerEx.line_length || layerEx.direction_count || 1
+            let out = duplicateAndSetPropertyUsing(layerEx, 'x', 'width', dir % lineLength)
+            out = setPropertyUsing(out, 'y', 'height', Math.floor(dir / lineLength))
+            return out
+        })
+    }
 }
 function draw_reactor(e: ReactorPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {

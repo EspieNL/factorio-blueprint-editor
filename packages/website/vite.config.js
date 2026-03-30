@@ -18,14 +18,20 @@ export default defineConfig(({ command, mode }) => {
     }
     if (mode !== 'production') {
         proxy['/data'] = {
-            target: 'http://127.0.0.1:8082',
+            target: 'http://127.0.0.1:8081',
             rewrite: path => path.replace(/^\/data/, ''),
         }
     }
     return {
+        // 'mpa' disables the SPA history-fallback so missing /data/*.basis files
+        // return a real 404 instead of index.html; this prevents the Basis
+        // transcoder web-worker from receiving HTML and throwing
+        // "startTranscoding failed" for every missing Space Age asset.
+        appType: 'mpa',
         build: { sourcemap: true },
         preview: { port: 8080 },
         server: {
+            allowedHosts: true,
             port: 8080,
             proxy,
         },
@@ -34,8 +40,9 @@ export default defineConfig(({ command, mode }) => {
                 ? viteStaticCopy({
                     targets: [
                         {
-                            src: '../exporter/data/output/*',
-                            dest: 'data',
+                            src: '../exporter/data/output',
+                            dest: '',
+                            rename: 'data',
                         },
                     ],
                 })

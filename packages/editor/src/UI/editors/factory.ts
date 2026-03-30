@@ -20,15 +20,12 @@ import { TrainStopEditor } from './TrainStopEditor'
  * @param entityNumber - Entity Number for which to create Editor for
  */
 export function createEditor(entity: Entity): Editor {
+    if (entity.type === 'assembling-machine') {
+        return new MachineEditor(entity)
+    }
+
     let editor: Editor
     switch (entity.name) {
-        // Assembly Machines
-        case 'assembling-machine-1':
-        case 'assembling-machine-2':
-        case 'assembling-machine-3': {
-            editor = new MachineEditor(entity)
-            break
-        }
         // Beacon
         case 'beacon': {
             editor = new BeaconEditor(entity)

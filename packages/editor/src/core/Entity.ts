@@ -27,6 +27,7 @@ import FD, {
     hasModuleFunctionality,
     recipeSupportsModule,
     getModuleInventoryIndex,
+    normalizeQualityId,
 } from './factorioData'
 import { Blueprint } from './Blueprint'
 import { getBeltWireConnectionIndex } from './spriteDataBuilder'
@@ -48,6 +49,7 @@ export interface EntityEvents {
     destroy: []
     position: [newValue: IPoint, oldValue: IPoint]
     direction: []
+    quality: []
     directionType: []
     recipe: [recipe: string]
     modules: [modules: (string | undefined)[]]
@@ -108,6 +110,20 @@ export class Entity extends EventEmitter<EntityEvents> {
     /** Entity Name */
     public get name(): string {
         return this.m_rawEntity.name
+    }
+
+    public get quality(): string | undefined {
+        return this.m_rawEntity.quality
+    }
+
+    public set quality(quality: string | undefined) {
+        const normalizedQuality = normalizeQualityId(quality)
+        if (this.m_rawEntity.quality === normalizedQuality) return
+
+        this.m_BP.history
+            .updateValue(this.m_rawEntity, 'quality', normalizedQuality, 'Change quality')
+            .onDone(() => this.emit('quality'))
+            .commit()
     }
 
     /** Entity Type */
@@ -171,7 +187,7 @@ export class Entity extends EventEmitter<EntityEvents> {
     }
 
     public get maxWireDistance(): number {
-        return getMaxWireDistance(this.entityData)
+        return getMaxWireDistance(this.entityData, this.quality)
     }
 
     public connectionsReach(position?: IPoint): boolean {
@@ -255,11 +271,19 @@ export class Entity extends EventEmitter<EntityEvents> {
     /** Recipes this entity can accept */
     public get acceptedRecipes(): string[] {
         const e = this.entityData
-        if (!isCraftingMachine(e)) return []
+        const fixedRecipe = (e as EntityWithOwnerPrototype & { fixed_recipe?: string }).fixed_recipe
+        if (fixedRecipe) {
+            return FD.recipes[fixedRecipe] ? [fixedRecipe] : []
+        }
+
+        const craftingCategories = (
+            e as EntityWithOwnerPrototype & { crafting_categories?: string[] }
+        ).crafting_categories
+        if (!craftingCategories || craftingCategories.length === 0) return []
 
         return Object.keys(FD.recipes)
             .map(k => FD.recipes[k])
-            .filter(recipe => e.crafting_categories.includes(recipe.category || 'crafting'))
+            .filter(recipe => craftingCategories.includes(recipe.category || 'crafting'))
             .map(recipe => recipe.name)
     }
 
@@ -835,8 +859,8 @@ export class Entity extends EventEmitter<EntityEvents> {
         return pr[
             (pr.indexOf(this.direction) +
                 (this.size.x !== this.size.y || this.type === 'underground-belt' ? 2 : 1) *
-                    (ccw ? 3 : 1)) %
-                pr.length
+                (ccw ? 3 : 1)) %
+            pr.length
         ]
     }
 

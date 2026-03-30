@@ -14,7 +14,6 @@ import EDITOR, {
     getBlueprintOrBookFromSource,
 } from '@fbe/editor'
 import { initToasts } from './toasts'
-import { initFeedbackButton } from './feedbackButton'
 import { initSettingsPane } from './settingsPane'
 
 document.addEventListener('contextmenu', e => e.preventDefault())
@@ -48,14 +47,13 @@ console.log(
     'color: #1f79aa; font-weight: bold'
 )
 
-initFeedbackButton()
 const createToast = initToasts()
 
 if (isMobile.any) {
     createToast({
         text:
             'Application is not compatible with mobile devices.<br>' +
-            'If you think this is a mistake, feel free to report this bug on github or using the feedback button.',
+            'If you think this is a mistake, feel free to report this bug on github.',
         type: 'error',
         timeout: Infinity,
     })
@@ -67,7 +65,7 @@ if (typeof WebAssembly !== 'object' && typeof WebAssembly.instantiate !== 'funct
     createToast({
         text:
             "Current browser doesn't support WebAssembly.<br>" +
-            'If you think this is a mistake, feel free to report this bug on github or using the feedback button.',
+            'If you think this is a mistake, feel free to report this bug on github.',
         type: 'error',
         timeout: Infinity,
     })
@@ -121,7 +119,11 @@ editor
     })
 
 window.addEventListener('visibilitychange', () => {
-    localStorage.setItem('quickbarItemNames', JSON.stringify(editor.quickbarItems))
+    try {
+        localStorage.setItem('quickbarItemNames', JSON.stringify(editor.quickbarItems))
+    } catch (_e) {
+        // Editor may not be fully initialized yet
+    }
 })
 
 async function loadBp(bpOrBook: Blueprint | Book): Promise<void> {
