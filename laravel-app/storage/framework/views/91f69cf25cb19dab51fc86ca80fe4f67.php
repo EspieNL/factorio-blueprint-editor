@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="initial-scale=1, maximum-scale=1, user-scalable=no, minimum-scale=1, width=device-width, height=device-height"
+        />
+        <meta
+            name="description"
+            content="A feature-rich Factorio Blueprint Editor running inside Laravel."
+        />
+
+        <title><?php echo e($title); ?></title>
+
+        <link rel="icon" href="/factorio-blueprint-editor-assets/favicon.png" />
+        <?php echo app('Illuminate\Foundation\Vite')(['resources/js/factorio-blueprint-editor.js']); ?>
+    </head>
+
+    <body>
+        <div id="loadingScreen" class="active">
+            <img id="logo" src="/factorio-blueprint-editor-assets/logo.svg" alt="" />
+            <img class="loadingWheel" src="/factorio-blueprint-editor-assets/loadingWheel.svg" alt="" />
+        </div>
+        <div id="corner-panel">
+            <img src="/factorio-blueprint-editor-assets/logo-small.svg" alt="" />
+            <span>Press I for info</span>
+        </div>
+        <div id="buttons">
+            <a
+                class="discord-button"
+                href="https://discord.gg/c5eXyBU"
+                target="_blank"
+                rel="noopener"
+            >
+                <span>Discord</span>
+                <img src="/factorio-blueprint-editor-assets/discord.svg" alt="" />
+            </a>
+            <a
+                class="github-button"
+                href="https://github.com/Teoxoy/factorio-blueprint-editor"
+                target="_blank"
+                rel="noopener"
+            >
+                <span>Github</span>
+                <img src="/factorio-blueprint-editor-assets/github.svg" alt="" />
+            </a>
+        </div>
+        <div id="info-panel">
+            <h1>INFO</h1>
+            <ul class="info-list">
+                <li>To access the inventory and start building press <mark>E</mark></li>
+                <li>To import/export a blueprint string use <mark>ctrl/cmd + C/V</mark></li>
+                <li>
+                    Check out the settings area for an in depth look at the settings and
+                    <mark>keybinds</mark>
+                </li>
+                <li>
+                    Leave your suggestions, ideas, new features or bug reports inside the app via
+                    the Feedback button or on Github
+                </li>
+            </ul>
+            <h2>Features</h2>
+            <ul>
+                <li>rendering and editing blueprints</li>
+                <li>history (undo/redo)</li>
+                <li>copy and delete selections</li>
+                <li>
+                    import blueprints and books from multiple sources (direct bp string, pastebin,
+                    hastebin, gist, gitlab, factorioprints, factorio.school, google docs)
+                </li>
+                <li>generating blueprint images</li>
+                <li>oil outpost generator</li>
+                <li>customizable keybinds</li>
+                <li>creative entities</li>
+            </ul>
+            <h2>Planned Features</h2>
+            <ul>
+                <li>more blueprint tools</li>
+                <li>more entity editors</li>
+                <li>full rails support</li>
+                <li>trains support</li>
+                <li>mod support</li>
+            </ul>
+            <h3>Available url query parameters</h3>
+            <ul>
+                <li>source=&lt;BPSTRING_OR_URL_TO_BPSTRING&gt;</li>
+                <li>index=&lt;INDEX_OF_BP_IN_BOOK&gt;</li>
+            </ul>
+            <p class="copyright-notice">
+                All art assets, spritesheets and other Factorio game data used in this project
+                belong to Wube Software Ltd and are not for redistribution
+            </p>
+        </div>
+        <canvas id="editor" tabindex="1"></canvas>
+    </body>
+</html><?php /**PATH /workspaces/factorio-blueprint-editor/packages/laravel-factorio-blueprint-editor/src/../resources/views/editor.blade.php ENDPATH**/ ?>

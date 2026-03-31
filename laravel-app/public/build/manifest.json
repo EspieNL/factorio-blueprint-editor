@@ -1,0 +1,124 @@
+{
+  "../node_modules/@fbe/editor/src/basis/transcoder.1.16.4.js": {
+    "file": "assets/transcoder.1.16.4-DL_XLwFg.js",
+    "src": "../node_modules/@fbe/editor/src/basis/transcoder.1.16.4.js"
+  },
+  "../node_modules/@fbe/editor/src/basis/transcoder.1.16.4.wasm": {
+    "file": "assets/transcoder.1.16.4-ByC-OjtC.wasm",
+    "src": "../node_modules/@fbe/editor/src/basis/transcoder.1.16.4.wasm"
+  },
+  "../node_modules/pixi.js/lib/environment-browser/browserAll.mjs": {
+    "file": "assets/browserAll-cAeGCluj.js",
+    "name": "browserAll",
+    "src": "../node_modules/pixi.js/lib/environment-browser/browserAll.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/factorio-blueprint-editor.js",
+      "_colorToUniform-BLiMc15I.js",
+      "_init-BsnPEyG4.js"
+    ]
+  },
+  "../node_modules/pixi.js/lib/environment-webworker/webworkerAll.mjs": {
+    "file": "assets/webworkerAll-CbTrN1p-.js",
+    "name": "webworkerAll",
+    "src": "../node_modules/pixi.js/lib/environment-webworker/webworkerAll.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/factorio-blueprint-editor.js",
+      "_init-BsnPEyG4.js"
+    ]
+  },
+  "../node_modules/pixi.js/lib/rendering/renderers/gl/WebGLRenderer.mjs": {
+    "file": "assets/WebGLRenderer-DHMyklBN.js",
+    "name": "WebGLRenderer",
+    "src": "../node_modules/pixi.js/lib/rendering/renderers/gl/WebGLRenderer.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/factorio-blueprint-editor.js"
+    ]
+  },
+  "../node_modules/pixi.js/lib/rendering/renderers/gpu/WebGPURenderer.mjs": {
+    "file": "assets/WebGPURenderer-CPHkLKK-.js",
+    "name": "WebGPURenderer",
+    "src": "../node_modules/pixi.js/lib/rendering/renderers/gpu/WebGPURenderer.mjs",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/factorio-blueprint-editor.js"
+    ]
+  },
+  "_CanvasPool-CB_tjJWI.js": {
+    "file": "assets/CanvasPool-CB_tjJWI.js",
+    "name": "CanvasPool",
+    "imports": [
+      "_colorToUniform-BLiMc15I.js"
+    ]
+  },
+  "_SharedSystems-BM4Pi0aC.js": {
+    "file": "assets/SharedSystems-BM4Pi0aC.js",
+    "name": "SharedSystems",
+    "imports": [
+      "_colorToUniform-BLiMc15I.js"
+    ]
+  },
+  "_chunk-70_6E5lJ.js": {
+    "file": "assets/chunk-70_6E5lJ.js",
+    "name": "chunk"
+  },
+  "_colorToUniform-BLiMc15I.js": {
+    "file": "assets/colorToUniform-BLiMc15I.js",
+    "name": "colorToUniform",
+    "imports": [
+      "_chunk-70_6E5lJ.js"
+    ]
+  },
+  "_init-BsnPEyG4.js": {
+    "file": "assets/init-BsnPEyG4.js",
+    "name": "init",
+    "imports": [
+      "resources/js/factorio-blueprint-editor.js",
+      "_colorToUniform-BLiMc15I.js"
+    ]
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-BVQDWE9R.css",
+    "name": "app",
+    "names": [
+      "app.css"
+    ],
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/js/app.js": {
+    "file": "assets/app-Ck1rJRfG.js",
+    "name": "app",
+    "src": "resources/js/app.js",
+    "isEntry": true,
+    "imports": [
+      "_chunk-70_6E5lJ.js"
+    ]
+  },
+  "resources/js/factorio-blueprint-editor.js": {
+    "file": "assets/factorio-blueprint-editor-C54dJFzy.js",
+    "name": "factorio-blueprint-editor",
+    "src": "resources/js/factorio-blueprint-editor.js",
+    "isEntry": true,
+    "imports": [
+      "_chunk-70_6E5lJ.js",
+      "_colorToUniform-BLiMc15I.js",
+      "_SharedSystems-BM4Pi0aC.js",
+      "_CanvasPool-CB_tjJWI.js"
+    ],
+    "dynamicImports": [
+      "../node_modules/pixi.js/lib/environment-browser/browserAll.mjs",
+      "../node_modules/pixi.js/lib/environment-webworker/webworkerAll.mjs",
+      "resources/js/factorio-blueprint-editor.js"
+    ],
+    "css": [
+      "assets/factorio-blueprint-editor-CZTz2SWa.css"
+    ],
+    "assets": [
+      "assets/transcoder.1.16.4-DL_XLwFg.js",
+      "assets/transcoder.1.16.4-ByC-OjtC.wasm"
+    ]
+  }
+}
