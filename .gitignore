@@ -1,7 +1,5 @@
-node_modules
-packages/website/dist
-packages/exporter/data/*
-!packages/exporter/data/output
-packages/exporter/data/output/metadata.json
-packages/exporter/target
-.env
+# Ignore everything:
+*
+
+# Except for
+/workspaces/factorio-blueprint-editor/packages/laravel-factorio-blueprint-editor/*
