@@ -7,7 +7,7 @@ import {
     CanvasTextMetrics,
     RenderTexture,
 } from 'pixi.js'
-import FD, { Color, ColorWithAlpha, getColor } from '../../core/factorioData'
+import FD, { Color, ColorWithAlpha, getColor, getQuality } from '../../core/factorioData'
 import { styles } from '../style'
 import G from '../../common/globals'
 import { IngredientPrototype, IconData, ProductPrototype, ItemPrototype } from 'factorio:prototype'
@@ -218,13 +218,22 @@ function CreateIcon(
         // inventory group icon is not present in FD.items
         FD.inventoryLayout.find(g => g.name === itemName)
 
+    return createIconFromPrototypeData(item, maxSize, setAnchor)
+}
+
+function createIconFromPrototypeData(
+    item: { icon?: string; icons?: readonly IconData[]; icon_size?: number },
+    maxSize = 32,
+    setAnchor = true
+): Container {
     if (item.icons) {
         return generateIcons(item.icons)
-    } else if (item.icon) {
-        return generateIcon(item.icon, item.icon_size)
-    } else {
-        throw new Error('Internal Error!')
     }
+    if (item.icon) {
+        return generateIcon(item.icon, item.icon_size)
+    }
+
+    throw new Error('Internal Error!')
 
     function generateIcon(filename: string, icon_size: number = 64): Sprite {
         const texture = G.getTexture(filename, 0, 0, icon_size, icon_size)
@@ -241,7 +250,8 @@ function CreateIcon(
         for (const icon of icons) {
             const sprite = generateIcon(icon.icon, icon.icon_size)
             if (icon.scale) {
-                sprite.scale.set(icon.scale, icon.scale)
+                // Layered icon scales are relative to base icon size.
+                sprite.scale.set(sprite.scale.x * icon.scale, sprite.scale.y * icon.scale)
             }
             if (icon.shift) {
                 sprite.position.set(icon.shift[0], icon.shift[1])
@@ -285,6 +295,20 @@ function CreateIconWithAmount(
     text.anchor.set(1, 1)
     text.position.set(x + 33, y + 33)
     host.addChild(text)
+}
+
+function CreateQualityIcon(quality = 'normal', size = 20): Container {
+    const qualityData = getQuality(quality)
+
+    if ((qualityData.icon || qualityData.icons) && qualityData.draw_sprite_by_default !== false) {
+        return createIconFromPrototypeData(qualityData, size, true)
+    }
+
+    const fallback = new Container()
+    const dot = new Graphics()
+    dot.circle(0, 0, Math.max(2.2, size * 0.28)).fill(0xd8d8d8)
+    fallback.addChild(dot)
+    return fallback
 }
 
 function CreateRecipe(
@@ -340,6 +364,7 @@ export default {
     DrawRectangle,
     DrawControlFace,
     CreateIcon,
+    CreateQualityIcon,
     CreateIconWithAmount,
     CreateRecipe,
     applyTint,

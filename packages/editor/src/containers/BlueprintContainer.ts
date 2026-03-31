@@ -184,13 +184,13 @@ export class BlueprintContainer extends Container {
         })
 
         this.on('pointerover', () => {
-            if (this.mode === EditorMode.PAINT) {
+            if (this.mode === EditorMode.PAINT && this.paintContainer) {
                 this.paintContainer.show()
             }
             this.updateHoverContainer()
         })
         this.on('pointerout', () => {
-            if (this.mode === EditorMode.PAINT) {
+            if (this.mode === EditorMode.PAINT && this.paintContainer) {
                 this.paintContainer.hide()
             }
             this.updateHoverContainer()
@@ -700,12 +700,12 @@ export class BlueprintContainer extends Container {
         const gridGraphics =
             pattern === 'checker'
                 ? new Graphics()
-                      .rect(0, 0, 32, 32)
-                      .rect(32, 32, 32, 32)
-                      .fill(0x808080)
-                      .rect(0, 32, 32, 32)
-                      .rect(32, 0, 32, 32)
-                      .fill(0xffffff)
+                    .rect(0, 0, 32, 32)
+                    .rect(32, 32, 32, 32)
+                    .fill(0x808080)
+                    .rect(0, 32, 32, 32)
+                    .rect(32, 0, 32, 32)
+                    .fill(0xffffff)
                 : new Graphics().rect(0, 0, 32, 32).fill(0x808080).rect(1, 1, 31, 31).fill(0xffffff)
 
         const renderTexture = RenderTexture.create({
@@ -814,7 +814,7 @@ export class BlueprintContainer extends Container {
     }
 
     public addEntitySprites(entitySprites: EntitySprite[], sort = true): void {
-        this.entitySprites.addChild(...entitySprites)
+        this.entitySprites.addChild(...entitySprites.filter(Boolean))
         if (sort) {
             this.sortEntities()
         }
@@ -892,7 +892,11 @@ export class BlueprintContainer extends Container {
         })
     }
 
-    public spawnPaintContainer(itemNameOrEntities: string | Entity[], direction = 0): void {
+    public spawnPaintContainer(
+        itemNameOrEntities: string | Entity[],
+        direction = 0,
+        quality?: string
+    ): void {
         if (this.mode === EditorMode.PAINT) {
             this.paintContainer.destroy()
         }
@@ -903,27 +907,53 @@ export class BlueprintContainer extends Container {
 
         if (typeof itemNameOrEntities === 'string') {
             const itemData = FD.items[itemNameOrEntities]
+            if (!itemData) {
+                this.setMode(EditorMode.NONE)
+                this.cursor = 'inherit'
+                return
+            }
             const wireResult = WiresPanel.Wires.includes(itemNameOrEntities) && itemNameOrEntities
             const tileResult = itemData.place_as_tile && itemData.place_as_tile.result
             const placeResult = itemData.place_result || tileResult || wireResult
 
-            if (wireResult) {
-                this.paintContainer = this.wirePaintSlot.addChild(
-                    new PaintWireContainer(this, placeResult)
-                )
-            } else if (tileResult) {
-                this.paintContainer = this.tilePaintSlot.addChild(
-                    new PaintTileContainer(this, placeResult)
-                )
-            } else {
-                this.paintContainer = this.entityPaintSlot.addChild(
-                    new PaintEntityContainer(this, placeResult, direction)
-                )
+            if (!placeResult) {
+                this.setMode(EditorMode.NONE)
+                this.cursor = 'inherit'
+                return
+            }
+
+            try {
+                if (wireResult) {
+                    this.paintContainer = this.wirePaintSlot.addChild(
+                        new PaintWireContainer(this, placeResult)
+                    )
+                } else if (tileResult) {
+                    this.paintContainer = this.tilePaintSlot.addChild(
+                        new PaintTileContainer(this, placeResult)
+                    )
+                } else {
+                    this.paintContainer = this.entityPaintSlot.addChild(
+                        new PaintEntityContainer(this, placeResult, direction, quality)
+                    )
+                }
+            } catch (error) {
+                console.error(`Failed to create paint container for '${placeResult}'.`, error)
+                this.paintContainer = undefined
+                this.setMode(EditorMode.NONE)
+                this.updateHoverContainer()
+                this.cursor = 'inherit'
+                return
             }
         } else {
             this.paintContainer = this.entityPaintSlot.addChild(
                 new PaintBlueprintContainer(this, itemNameOrEntities)
             )
+        }
+
+        if (!this.paintContainer) {
+            this.setMode(EditorMode.NONE)
+            this.cursor = 'inherit'
+            return
         }
 
         if (!this.isPointerInside) {

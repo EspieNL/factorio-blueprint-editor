@@ -11,7 +11,7 @@ import F from '../UI/controls/functions'
 import { Entity } from '../core/Entity'
 import { PositionGrid } from '../core/PositionGrid'
 import { getSpriteData, ExtendedSpriteData } from '../core/spriteDataBuilder'
-import { ColorWithAlpha, getColor } from '../core/factorioData'
+import FD, { ColorWithAlpha, getColor } from '../core/factorioData'
 import { BlendMode } from 'factorio:prototype'
 
 interface IEntityData {
@@ -112,32 +112,81 @@ export class EntitySprite extends Sprite {
         position?: IPoint,
         positionGrid?: PositionGrid
     ): EntitySprite[] {
-        const spriteData = getSpriteData({
-            dir: entity.direction,
+        let spriteData: readonly ExtendedSpriteData[] = []
+        try {
+            spriteData = getSpriteData({
+                dir: entity.direction,
 
-            name: entity.name,
-            positionGrid,
-            position: entity.position,
-            generateConnector: entity.generateConnector,
+                name: entity.name,
+                positionGrid,
+                position: entity.position,
+                generateConnector: entity.generateConnector,
 
-            dirType: entity.directionType,
-            selectorCombinatorSelectMax: entity.selectorCombinatorSelectMax,
-            operator: entity.operator,
-            displayPanelIcon: entity.displayPanelIcon,
-            assemblerHasFluidInputs: entity.assemblerHasFluidInputs,
-            assemblerHasFluidOutputs: entity.assemblerHasFluidOutputs,
-            trainStopColor: entity.trainStopColor,
-            modules: entity.modules,
-        })
+                dirType: entity.directionType,
+                selectorCombinatorSelectMax: entity.selectorCombinatorSelectMax,
+                operator: entity.operator,
+                displayPanelIcon: entity.displayPanelIcon,
+                assemblerHasFluidInputs: entity.assemblerHasFluidInputs,
+                assemblerHasFluidOutputs: entity.assemblerHasFluidOutputs,
+                trainStopColor: entity.trainStopColor,
+                modules: entity.modules,
+            })
+        } catch (error) {
+            console.warn(`Failed to build sprite data for '${entity.name}'.`, error)
+        }
 
         // TODO: maybe move the __zIndex logic to spriteDataBuilder
         const parts: EntitySprite[] = []
+        const getEntityIconFallback = (): EntitySprite[] => {
+            const entityData = FD.entities[entity.name]
+            if (!entityData) return []
+
+            const iconPath = entityData.icon || (entityData.icons && entityData.icons[0]?.icon)
+            if (!iconPath) return []
+
+            const iconSize =
+                entityData.icon_size || (entityData.icons && entityData.icons[0]?.icon_size) || 64
+            const texture = G.getTexture(iconPath, 0, 0, iconSize, iconSize)
+            const fakeData: ExtendedSpriteData = {
+                filename: iconPath,
+                scale: 32 / iconSize,
+            } as ExtendedSpriteData
+            const sprite = new EntitySprite(texture, fakeData, position)
+            sprite.zOrder = 0
+            return [sprite]
+        }
+
+        // Check if all sprite filenames point to known-missing modules
+        // (e.g., space-age entity graphics that aren't available)
+        const hasAvailableSprite = spriteData.some(data => {
+            if (!data || data.draw_as_shadow || !data.filename) return false
+            // Check against known-missing texture registry
+            const key = `/data/${data.filename.replace('.png', '.basis')}`
+            if (G.isMissingTexture(key)) return false
+            return true
+        })
+
+        if (!hasAvailableSprite && spriteData.length > 0) {
+            return getEntityIconFallback()
+        }
+
+        // If any non-shadow sprite texture is known-missing, render the entity icon
+        // instead of potentially invisible placeholder geometry.
+        const hasKnownMissingSprite = spriteData.some(data => {
+            if (!data || data.draw_as_shadow || !data.filename) return false
+            const key = `/data/${data.filename.replace('.png', '.basis')}`
+            return G.isMissingTexture(key)
+        })
+        if (hasKnownMissingSprite) {
+            return getEntityIconFallback()
+        }
 
         let foundMainBelt = false
         for (let i = 0; i < spriteData.length; i++) {
             const data = spriteData[i]
             if (!data) continue
             if (data.draw_as_shadow) continue
+            if (!data.filename) continue
 
             const texture = G.getTexture(
                 data.filename,
@@ -193,6 +242,10 @@ export class EntitySprite extends Sprite {
             sprite.zOrder = i
 
             parts.push(sprite)
+        }
+
+        if (parts.length === 0) {
+            return getEntityIconFallback()
         }
 
         return parts

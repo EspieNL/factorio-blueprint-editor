@@ -38,22 +38,60 @@ let actions: ActionRegistry
 
 const started = new Map<string, Promise<Texture>>()
 const textureCache = new Map<string, Texture>()
+const missingTextures = new Set<string>()
 
 let count = 0
 let T: number
+
+function getMissingTexture(): Texture {
+    return Texture.WHITE
+}
+
+function isMissingTexture(path: string): boolean {
+    return missingTextures.has(path)
+}
 
 function getBT(path: string): Promise<Texture> {
     if (count === 0) {
         T = performance.now()
     }
     count += 1
-    return Assets.load(path).then(bt => {
+
+    const done = () => {
         count -= 1
         if (count <= 0) {
             console.log('done', performance.now() - T)
         }
-        return bt
-    })
+    }
+
+    // Pre-check with HEAD to avoid sending 404 URLs to the Basis worker,
+    // which throws unhandled rejections that never propagate back to Assets.load
+    return fetch(path, { method: 'HEAD' }).then(
+        response => {
+            if (!response.ok) {
+                done()
+                missingTextures.add(path)
+                return getMissingTexture()
+            }
+            return Assets.load(path).then(
+                bt => {
+                    done()
+                    return bt
+                },
+                err => {
+                    done()
+                    missingTextures.add(path)
+                    console.warn(`Failed to load texture ${path}; using placeholder texture instead.`, err)
+                    return getMissingTexture()
+                }
+            )
+        },
+        () => {
+            done()
+            missingTextures.add(path)
+            return getMissingTexture()
+        }
+    )
 }
 
 function getTexture(path: string, x = 0, y = 0, w = 0, h = 0): Texture {
@@ -71,6 +109,18 @@ function getTexture(path: string, x = 0, y = 0, w = 0, h = 0): Texture {
     }
     prom.then(
         bt => {
+            // If the texture is the missing placeholder (Texture.WHITE), use it as-is
+            // without trying to carve a sub-frame that exceeds its dimensions
+            if (bt === Texture.WHITE || bt.source === Texture.WHITE.source) {
+                t.source = bt.source
+                t.frame.x = 0
+                t.frame.y = 0
+                t.frame.width = w || 1
+                t.frame.height = h || 1
+                t.update()
+                t.dynamic = false
+                return
+            }
             t.source = bt.source
             t.frame.x = x
             t.frame.y = y
@@ -92,5 +142,6 @@ export default {
     bp,
     actions,
     getTexture,
+    isMissingTexture,
     logger,
 }

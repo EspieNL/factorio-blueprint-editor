@@ -406,7 +406,12 @@ class Blueprint extends EventEmitter<BlueprintEvents> {
         this.history.commitTransaction()
     }
 
-    public fastReplaceEntity(name: string, direction: number, position: IPoint): boolean {
+    public fastReplaceEntity(
+        name: string,
+        direction: number,
+        position: IPoint,
+        quality?: string
+    ): boolean {
         const entity = this.entityPositionGrid.checkFastReplaceableGroup(name, direction, position)
 
         if (!entity) return false
@@ -422,6 +427,7 @@ class Blueprint extends EventEmitter<BlueprintEvents> {
             direction,
             position: entity.position,
             entity_number: entity.entityNumber,
+            quality,
         }).pasteSettings(entity)
 
         for (const conn of connections) {

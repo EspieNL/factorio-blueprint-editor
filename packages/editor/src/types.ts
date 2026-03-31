@@ -221,6 +221,7 @@ export type InfinityMode = 'at-least' | 'at-most' | 'exactly' | 'add' | 'remove'
 export interface IEntity {
     entity_number: number
     name: string
+    quality?: string
     position: IPoint
 
     /** direction, can be ommited if 0 */

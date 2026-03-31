@@ -16,6 +16,7 @@ import { Entity } from './core/Entity'
 import { Blueprint, oilOutpostSettings, IOilOutpostSettings } from './core/Blueprint'
 import { BlueprintContainer, GridPattern } from './containers/BlueprintContainer'
 import { PaintTileContainer } from './containers/PaintTileContainer'
+import { EntityContainer } from './containers/EntityContainer'
 import { UIContainer } from './UI/UIContainer'
 import { Dialog } from './UI/controls/Dialog'
 import { ActionRegistry, MouseButton } from './actions'
@@ -91,10 +92,10 @@ export class Editor {
         G.BPC.gridPattern = pattern
     }
 
-    public get quickbarItems(): string[] {
+    public get quickbarItems(): ({ name: string; quality?: string } | undefined)[] {
         return G.UI.quickbarPanel.serialize()
     }
-    public set quickbarItems(items: string[]) {
+    public set quickbarItems(items: (string | { name: string; quality?: string } | undefined)[]) {
         G.UI.quickbarPanel.generateSlots(items)
     }
 
@@ -322,7 +323,8 @@ export class Editor {
                             G.UI.createInventory(
                                 'Inventory',
                                 undefined,
-                                G.BPC.spawnPaintContainer.bind(G.BPC)
+                                (selectedItem, quality) =>
+                                    G.BPC.spawnPaintContainer(selectedItem, 0, quality)
                             )
                         }
                         return true
@@ -576,8 +578,19 @@ export class Editor {
             G.actions.releaseAll()
         }
 
+        const refreshOverlayInfo = (): void => {
+            if (!G.BPC) return
+            EntityContainer.refreshAllEntityInfos()
+        }
+
         window.addEventListener('keydown', keydown)
         window.addEventListener('keyup', keyup)
         window.addEventListener('blur', releaseAll)
+        window.addEventListener('focus', refreshOverlayInfo)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                refreshOverlayInfo()
+            }
+        })
     }
 }

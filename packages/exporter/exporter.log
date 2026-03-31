@@ -1,0 +1,65 @@
+Downloaded Factorio version matches required version
+Generating data.json with Space Age support
+Running Factorio from: /workspaces/factorio-blueprint-editor/packages/exporter/data/factorio
+Executable: /workspaces/factorio-blueprint-editor/packages/exporter/data/factorio/bin/x64/factorio
+   0.000 2026-03-26 19:39:54; Factorio 2.0.68 (build 84094, linux64, headless, space-age)
+   0.018 Operating system: Linux (Ubuntu 24.04)
+   0.018 Program arguments: "/workspaces/factorio-blueprint-editor/packages/exporter/data/factorio/bin/x64/factorio" "--start-server-load-scenario" "export-data/export-data" 
+   0.018 Config path: /workspaces/factorio-blueprint-editor/packages/exporter/data/factorio/config/config.ini
+   0.018 Read data path: /workspaces/factorio-blueprint-editor/packages/exporter/data/factorio/data
+   0.018 Write data path: /workspaces/factorio-blueprint-editor/packages/exporter/data/factorio [17700/32077MB]
+   0.018 Binaries path: /workspaces/factorio-blueprint-editor/packages/exporter/data/factorio/bin
+   0.027 System info: [CPU: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz, 2 cores, RAM: 7943 MB]
+   0.027 Environment: DISPLAY=<unset> WAYLAND_DISPLAY=<unset> DESKTOP_SESSION=<unset> XDG_SESSION_DESKTOP=<unset> XDG_CURRENT_DESKTOP=<unset> SDL_VIDEODRIVER=<unset> __GL_FSAA_MODE=<unset> __GL_LOG_MAX_ANISO=<unset> __GL_SYNC_TO_VBLANK=<unset> __GL_SORT_FBCONFIGS=<unset> __GL_YIELD=<unset>
+   0.027 Running in headless mode
+   0.027 Audio is disabled
+   0.042 Info ModManager.cpp:444: FeatureFlag expansion-shaders = true
+   0.042 Info ModManager.cpp:444: FeatureFlag freezing = true
+   0.042 Info ModManager.cpp:444: FeatureFlag quality = true
+   0.043 Info ModManager.cpp:444: FeatureFlag rail-bridges = true
+   0.043 Info ModManager.cpp:444: FeatureFlag segmented-units = true
+   0.043 Info ModManager.cpp:444: FeatureFlag space-travel = true
+   0.043 Info ModManager.cpp:444: FeatureFlag spoiling = true
+   0.049 Loading mod core 0.0.0 (data.lua)
+   0.064 Loading mod base 2.0.68 (data.lua)
+   0.200 Loading mod elevated-rails 2.0.68 (data.lua)
+   0.232 Loading mod quality 2.0.68 (data.lua)
+   0.256 Loading mod space-age 2.0.68 (data.lua)
+   0.449 Loading mod base 2.0.68 (data-updates.lua)
+   0.483 Loading mod quality 2.0.68 (data-updates.lua)
+   0.524 Loading mod space-age 2.0.68 (data-updates.lua)
+   0.569 Loading mod export-data 0.0.0 (data-final-fixes.lua)
+   3.097 Checksum for core: 3940616080
+   3.098 Checksum of base: 111201062
+   3.098 Checksum of elevated-rails: 1854266510
+   3.098 Checksum of export-data: 1395744314
+   3.098 Checksum of quality: 4244552060
+   3.098 Checksum of space-age: 1939956210
+   4.578 Prototype list checksum: 2914896238
+   4.749 Info PlayerData.cpp:66: Local player-data.json unavailable
+   4.750 Info PlayerData.cpp:71: Cloud player-data.json unavailable
+   4.764 Factorio initialised
+   4.799 Info ServerSynchronizer.cpp:22: nextHeartbeatSequenceNumber(0) initialized Synchronizer nextTickClosureTick(0).
+   4.799 Info ServerMultiplayerManager.cpp:808: updateTick(18446744073709551615) changing state from(Ready) to(PreparedToHostGame)
+   4.799 Info ServerMultiplayerManager.cpp:808: updateTick(18446744073709551615) changing state from(PreparedToHostGame) to(CreatingGame)
+   4.918 Blueprint storage "blueprint-storage-2.dat" was not found, trying to load previous version storage "blueprint-storage.dat"
+   8.621 Loading level.dat: 1762911 bytes.
+   8.621 Info Scenario.cpp:153: Map version 2.0.68-0
+   8.742 Blueprint storage "blueprint-storage-2.dat" was not found, trying to load previous version storage "blueprint-storage.dat"
+   8.744 Checksum for script __level__/control.lua: 522512210
+  20.256 Error ServerMultiplayerManager.cpp:84: MultiplayerManager failed: "The scenario level caused a non-recoverable error.
+Please report this error to the scenario author.
+
+Error while running event level::on_init()
+__level__/control.lua:20: !EXIT!
+stack traceback:
+	[C]: in function 'error'
+	__level__/control.lua:20: in function <__level__/control.lua:11>"
+  20.256 Info ServerMultiplayerManager.cpp:808: updateTick(18446744073709551615) changing state from(CreatingGame) to(InitializationFailed)
+  20.256 Info CommandLineMultiplayer.cpp:211: Exit point.
+  20.261 Info ServerMultiplayerManager.cpp:146: Quitting multiplayer connection.
+  20.261 Info ServerMultiplayerManager.cpp:808: updateTick(18446744073709551615) changing state from(InitializationFailed) to(Closed)
+  20.263 Info ServerMultiplayerManager.cpp:166: Deleting active scenario (global = true).
+  20.353 Info UDPSocket.cpp:237: Closing socket
+  20.354 Goodbye
+Error: "Factorio exited with status: exit status: 1"

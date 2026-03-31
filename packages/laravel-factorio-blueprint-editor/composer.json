@@ -1,0 +1,27 @@
+{
+    "name": "espienl/factorio-blueprint-editor-laravel",
+    "description": "Laravel package for hosting the Factorio Blueprint Editor and exporter data endpoints.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "illuminate/routing": "^12.0|^13.0",
+        "illuminate/support": "^12.0|^13.0",
+        "illuminate/view": "^12.0|^13.0",
+        "symfony/process": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "FactorioBlueprintEditorLaravel\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "FactorioBlueprintEditorLaravel\\FactorioBlueprintEditorServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

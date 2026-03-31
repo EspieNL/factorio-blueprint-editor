@@ -1,5 +1,9 @@
 import { Container, Rectangle, Text } from 'pixi.js'
-import FD, { getModule } from '../core/factorioData'
+import FD, {
+    getBeaconSupplyAreaDistance,
+    getCraftingMachineSpeedMultiplierForQuality,
+    getModule,
+} from '../core/factorioData'
 import G from '../common/globals'
 import util from '../common/util'
 import { Entity } from '../core/Entity'
@@ -25,6 +29,10 @@ function template(strings: TemplateStringsArray, ...keys: (number | string)[]) {
 const entityInfoTemplate = template`
 Crafting speed: ${'craftingSpeed'} ${'speedMultiplier'}
 Power consumption: ${'energyUsage'} kW ${'energyMultiplier'}`
+
+function fmtPercent(n: number): string {
+    return `(${Math.sign(n) === 1 ? '+' : '-'}${roundToTwo(Math.abs(n) * 100)}%)`
+}
 
 const SIZE_OF_ITEM_ON_BELT = 0.25
 
@@ -156,19 +164,26 @@ export class EntityInfoPanel extends Panel {
             }
 
             consumption = consumption < -0.8 ? -0.8 : consumption
-            const newCraftingSpeed = entity.entityData.crafting_speed * (1 + speed)
+            const qualitySpeedMultiplier = getCraftingMachineSpeedMultiplierForQuality(entity.quality)
+            const newCraftingSpeed =
+                entity.entityData.crafting_speed * qualitySpeedMultiplier * (1 + speed)
             const newEnergyUsage =
                 parseInt(entity.entityData.energy_usage.slice(0, -2)) * (1 + consumption)
 
-            const fmt = (n: number): string =>
-                `(${Math.sign(n) === 1 ? '+' : '-'}${roundToTwo(Math.abs(n) * 100)}%)`
+            const speedParts = []
+            if (qualitySpeedMultiplier !== 1) {
+                speedParts.push(`quality ${fmtPercent(qualitySpeedMultiplier - 1)}`)
+            }
+            if (speed) {
+                speedParts.push(`modules ${fmtPercent(speed)}`)
+            }
 
             // Show modules effect and some others informations
             this.m_entityInfo.text = entityInfoTemplate({
                 craftingSpeed: roundToFour(newCraftingSpeed),
-                speedMultiplier: speed ? fmt(speed) : '',
+                speedMultiplier: speedParts.length > 0 ? `(${speedParts.join(', ')})` : '',
                 energyUsage: roundToTwo(newEnergyUsage),
-                energyMultiplier: consumption ? fmt(consumption) : '',
+                energyMultiplier: consumption ? fmtPercent(consumption) : '',
             })
 
             this.m_entityInfo.position.set(10, nextY)
@@ -287,8 +302,8 @@ export class EntityInfoPanel extends Panel {
                 return false
             }
 
-            const beaconAura = new Rectangle(beacon.position.x, beacon.position.y, 1, 1)
-            beaconAura.pad(FD.entities.beacon.supply_area_distance + 1)
+                const beaconAura = new Rectangle(beacon.position.x, beacon.position.y, 1, 1)
+                beaconAura.pad(getBeaconSupplyAreaDistance(beacon.entityData, beacon.quality) + 1)
 
             return (
                 beaconAura.contains(entityRect.left, entityRect.top) ||

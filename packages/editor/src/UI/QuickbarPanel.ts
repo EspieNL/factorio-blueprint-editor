@@ -4,17 +4,37 @@ import G from '../common/globals'
 import { Panel } from './controls/Panel'
 import { Slot } from './controls/Slot'
 import F from './controls/functions'
-import { colors } from './style'
+import { colors, styles } from './style'
 
-class QuickbarSlot extends Slot<string | undefined> {
+interface QuickbarItem {
+    name: string
+    quality?: string
+}
+
+type QuickbarSerializedItem = string | QuickbarItem | undefined
+
+class QuickbarSlot extends Slot<QuickbarItem | undefined> {
     public get itemName(): string {
-        return this.data
+        return this.data?.name
     }
 
-    public assignItem(itemName: string): void {
+    public get itemQuality(): string | undefined {
+        return this.data?.quality
+    }
+
+    public assignItem(itemName: string, quality?: string): void {
         if (itemName === 'blueprint') return
-        this.data = itemName
-        this.content = F.CreateIcon(itemName)
+        this.data = { name: itemName, quality }
+        const icon = new Container()
+        icon.addChild(F.CreateIcon(itemName))
+
+        if (quality) {
+            const qualityTag = F.CreateQualityIcon(quality, 12)
+            qualityTag.position.set(8, 8)
+            icon.addChild(qualityTag)
+        }
+
+        this.content = icon
     }
 
     public unassignItem(): void {
@@ -78,14 +98,25 @@ export class QuickbarPanel extends Panel {
         return button
     }
 
-    public generateSlots(itemNames?: string[]): void {
+    private static parseSerializedItem(item: QuickbarSerializedItem): QuickbarItem | undefined {
+        if (!item) return undefined
+        if (typeof item === 'string') {
+            return { name: item }
+        }
+        if (!item.name) return undefined
+        return { name: item.name, quality: item.quality }
+    }
+
+    public generateSlots(itemNames?: QuickbarSerializedItem[]): void {
         for (let r = 0; r < this.rows; r++) {
             for (let i = 0; i < 10; i++) {
                 const quickbarSlot = new QuickbarSlot()
                 quickbarSlot.position.set((36 + 2) * i + (i > 4 ? 38 : 0), 38 * r)
 
-                if (itemNames && itemNames[r * 10 + i]) {
-                    quickbarSlot.assignItem(itemNames[r * 10 + i])
+                const serializedItem = itemNames && itemNames[r * 10 + i]
+                const parsedItem = QuickbarPanel.parseSerializedItem(serializedItem)
+                if (parsedItem) {
+                    quickbarSlot.assignItem(parsedItem.name, parsedItem.quality)
                 }
 
                 quickbarSlot.on('pointerdown', e => {
@@ -98,25 +129,40 @@ export class QuickbarPanel extends Panel {
 
                     if (e.button === 0) {
                         if (G.BPC.mode === EditorMode.PAINT) {
+                            if (!G.BPC.paintContainer) return
                             if (quickbarSlot.itemName) {
-                                if (quickbarSlot.itemName === G.BPC.paintContainer.getItemName()) {
+                                if (
+                                    quickbarSlot.itemName === G.BPC.paintContainer.getItemName() &&
+                                    quickbarSlot.itemQuality === G.BPC.paintContainer.getQuality()
+                                ) {
                                     // UC2.5
                                     G.BPC.paintContainer.destroy()
                                 } else {
                                     // UC2
-                                    G.BPC.spawnPaintContainer(quickbarSlot.itemName)
+                                    G.BPC.spawnPaintContainer(
+                                        quickbarSlot.itemName,
+                                        0,
+                                        quickbarSlot.itemQuality
+                                    )
                                 }
                             } else {
                                 // UC1
-                                quickbarSlot.assignItem(G.BPC.paintContainer.getItemName())
+                                quickbarSlot.assignItem(
+                                    G.BPC.paintContainer.getItemName(),
+                                    G.BPC.paintContainer.getQuality()
+                                )
                             }
                         } else if (quickbarSlot.itemName) {
                             // UC4
-                            G.BPC.spawnPaintContainer(quickbarSlot.itemName)
+                            G.BPC.spawnPaintContainer(
+                                quickbarSlot.itemName,
+                                0,
+                                quickbarSlot.itemQuality
+                            )
                         } else {
                             // UC3
-                            G.UI.createInventory('Inventory', undefined, item =>
-                                quickbarSlot.assignItem(item)
+                            G.UI.createInventory('Inventory', undefined, (item, quality) =>
+                                quickbarSlot.assignItem(item, quality)
                             )
                         }
                     } else if (e.button === 2) {
@@ -133,14 +179,20 @@ export class QuickbarPanel extends Panel {
 
     public bindKeyToSlot(slot: number): void {
         const itemName = this.slots[slot].itemName
+        const itemQuality = this.slots[slot].itemQuality
         if (!itemName) return
 
-        if (G.BPC.mode === EditorMode.PAINT && G.BPC.paintContainer.getItemName() === itemName) {
+        if (
+            G.BPC.mode === EditorMode.PAINT &&
+            G.BPC.paintContainer &&
+            G.BPC.paintContainer.getItemName() === itemName &&
+            G.BPC.paintContainer.getQuality() === itemQuality
+        ) {
             G.BPC.paintContainer.destroy()
             return
         }
 
-        G.BPC.spawnPaintContainer(itemName)
+        G.BPC.spawnPaintContainer(itemName, 0, itemQuality)
     }
 
     public changeActiveQuickbar(): void {
@@ -152,8 +204,8 @@ export class QuickbarPanel extends Panel {
         this.generateSlots(itemNames)
     }
 
-    public serialize(): string[] {
-        return this.slots.map(s => s.itemName)
+    public serialize(): (QuickbarItem | undefined)[] {
+        return this.slots.map(s => (s.itemName ? { name: s.itemName, quality: s.itemQuality } : undefined))
     }
 
     protected override setPosition(): void {

@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js'
 import { DirectionType, IPoint } from '../types'
-import FD, { getEntitySize, getPossibleRotations } from '../core/factorioData'
+import FD, { getEntitySize, getPossibleRotations, normalizeQualityId } from '../core/factorioData'
 import { Entity } from '../core/Entity'
 import { EntitySprite } from './EntitySprite'
 import { VisualizationArea } from './VisualizationArea'
@@ -11,16 +11,22 @@ export class PaintEntityContainer extends PaintContainer {
     private visualizationArea: VisualizationArea
     private directionType: DirectionType
     private direction: number
+    private readonly quality?: string
     /** This is only a reference */
     private undergroundLine: Container
 
-    public constructor(bpc: BlueprintContainer, name: string, direction: number) {
+    public constructor(bpc: BlueprintContainer, name: string, direction: number, quality?: string) {
         super(bpc, name)
 
         this.direction = direction
+        this.quality = normalizeQualityId(quality)
         this.directionType = FD.entities[name].type === 'loader' ? 'output' : 'input'
 
-        this.visualizationArea = this.bpc.underlayContainer.create(this.name, this.position)
+        this.visualizationArea = this.bpc.underlayContainer.create(
+            this.name,
+            this.position,
+            this.quality
+        )
         this.visualizationArea.highlight()
         this.bpc.underlayContainer.activateRelatedAreas(this.name)
 
@@ -30,7 +36,12 @@ export class PaintEntityContainer extends PaintContainer {
     }
 
     private get size(): IPoint {
-        return getEntitySize(FD.entities[this.name], this.direction)
+        try {
+            return getEntitySize(FD.entities[this.name], this.direction)
+        } catch {
+            // Some prototypes only support cardinal directions for size mapping.
+            return getEntitySize(FD.entities[this.name], 0)
+        }
     }
 
     public hide(): void {
@@ -54,6 +65,10 @@ export class PaintEntityContainer extends PaintContainer {
 
     public override getItemName(): string {
         return Entity.getItemName(this.name)
+    }
+
+    public override getQuality(): string | undefined {
+        return this.quality
     }
 
     private checkBuildable(): void {
@@ -146,12 +161,21 @@ export class PaintEntityContainer extends PaintContainer {
 
     protected override redraw(): void {
         this.removeChildren()
-        const sprites = EntitySprite.getParts({
-            name: this.name,
-            direction: this.directionType === 'input' ? this.direction : (this.direction + 8) % 16,
-            directionType: this.directionType,
-        })
-        this.addChild(...sprites)
+        try {
+            const sprites = EntitySprite.getParts({
+                name: this.name,
+                direction:
+                    this.directionType === 'input' ? this.direction : (this.direction + 8) % 16,
+                directionType: this.directionType,
+            })
+            const validSprites = sprites.filter(Boolean)
+            if (validSprites.length > 0) {
+                this.addChild(...validSprites)
+            }
+        } catch (error) {
+            // Keep paint mode usable even if a prototype has unsupported sprite metadata.
+            console.warn(`Failed to render paint preview for '${this.name}'.`, error)
+        }
     }
 
     public override moveAtCursor(): void {
@@ -215,7 +239,7 @@ export class PaintEntityContainer extends PaintContainer {
         const direction =
             this.directionType === 'input' ? this.direction : (this.direction + 8) % 16
 
-        if (this.bpc.bp.fastReplaceEntity(this.name, direction, position)) return
+        if (this.bpc.bp.fastReplaceEntity(this.name, direction, position, this.quality)) return
 
         const snEnt = this.bpc.bp.entityPositionGrid.checkSameEntityAndDifferentDirection(
             this.name,
@@ -224,6 +248,24 @@ export class PaintEntityContainer extends PaintContainer {
         )
         if (snEnt) {
             snEnt.direction = direction
+            snEnt.quality = this.quality
+            return
+        }
+
+        const sameEnt = this.bpc.bp.entityPositionGrid.getEntityAtPosition(position)
+        const sameDirectionType =
+            fd.type === 'underground-belt' || fd.type === 'loader'
+                ? sameEnt?.directionType === this.directionType
+                : true
+        if (
+            sameEnt &&
+            sameEnt.name === this.name &&
+            sameEnt.position.x === position.x &&
+            sameEnt.position.y === position.y &&
+            sameEnt.direction === direction &&
+            sameDirectionType
+        ) {
+            sameEnt.quality = this.quality
             return
         }
 
@@ -233,6 +275,7 @@ export class PaintEntityContainer extends PaintContainer {
                     name: this.name,
                     position,
                     direction,
+                    quality: this.quality,
                     type:
                         fd.type === 'underground-belt' || fd.type === 'loader'
                             ? this.directionType
