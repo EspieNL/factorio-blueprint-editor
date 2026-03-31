@@ -1,4 +1,4 @@
-import './editor.styl'
+import './editor.css'
 
 import { isMobile } from 'pixi.js'
 import FileSaver from 'file-saver'
