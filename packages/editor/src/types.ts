@@ -221,6 +221,7 @@ export type InfinityMode = 'at-least' | 'at-most' | 'exactly' | 'add' | 'remove'
 export interface IEntity {
     entity_number: number
     name: string
+    quality?: string
     position: IPoint
 
     /** direction, can be ommited if 0 */
@@ -288,12 +289,12 @@ export interface IEntity {
      * only present if entity is cargo-landing-pad, infinity-container, logistic-container, roboport, space-platform-hub
      */
     request_filters?:
-        | {
-              index: number
-              name: string
-              count?: number
-          }[]
-        | LogisticSections
+    | {
+        index: number
+        name: string
+        count?: number
+    }[]
+    | LogisticSections
     /** pre 2.0, moved to request_filters, only present if entity is requester-chest */
     request_from_buffers?: boolean
 
@@ -408,16 +409,16 @@ export interface IEntity {
 
         /** only present if entity is cargo landing pad, buffer-chest or requester-chest */
         circuit_mode_of_operation?:
-            | defines.control_behavior.cargo_landing_pad.exclusive_mode
-            | defines.control_behavior.logistic_container.exclusive_mode
+        | defines.control_behavior.cargo_landing_pad.exclusive_mode
+        | defines.control_behavior.logistic_container.exclusive_mode
 
         // only present if entity is roboport
         /** pre 2.0 */
         read_logistics?: boolean
         /** post 2.0 */
         read_items_mode?:
-            | defines.control_behavior.roboport.read_items_mode
-            | defines.control_behavior.rocket_silo.read_mode
+        | defines.control_behavior.roboport.read_items_mode
+        | defines.control_behavior.rocket_silo.read_mode
         read_robot_stats?: boolean
         available_logistic_output_signal?: ISignal
         total_logistic_output_signal?: ISignal

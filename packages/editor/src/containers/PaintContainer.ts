@@ -159,6 +159,11 @@ export abstract class PaintContainer extends Container<EntitySprite> {
     // override
     public abstract getItemName(): string
 
+    /** Override for paint containers that carry quality metadata. */
+    public getQuality(): string | undefined {
+        return undefined
+    }
+
     // override
     public abstract rotate(ccw?: boolean): void
 

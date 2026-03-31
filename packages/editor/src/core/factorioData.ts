@@ -492,7 +492,14 @@ export function getMaxWireDistance(e: EntityWithOwnerPrototype): number {
     }
 }
 
-export function mapBoundingBox(bb: BoundingBox): [[number, number], [number, number]] {
+export function mapBoundingBox(bb?: BoundingBox): [[number, number], [number, number]] {
+    if (!bb) {
+        // Fallback to a 1x1 footprint when prototype bounds are unavailable.
+        return [
+            [-0.5, -0.5],
+            [0.5, 0.5],
+        ]
+    }
     const mapP = (p: MapPosition): [number, number] =>
         Array.isArray(p) ? [p[0], p[1]] : [p.x, p.y]
     if (Array.isArray(bb)) {
@@ -503,7 +510,11 @@ export function mapBoundingBox(bb: BoundingBox): [[number, number], [number, num
 }
 
 export function getEntitySize(e: EntityWithOwnerPrototype, dir: number = 0): IPoint {
-    const bb = mapBoundingBox(e.collision_box)
+    if (e.type === 'rail-support') {
+        return { x: 4, y: 4 }
+    }
+
+    const bb = mapBoundingBox(e.collision_box || e.selection_box)
     const w = e.tile_width || Math.ceil(Math.abs(bb[0][0]) + Math.abs(bb[1][0]))
     const h = e.tile_height || Math.ceil(Math.abs(bb[0][1]) + Math.abs(bb[1][1]))
     if (w === h) {

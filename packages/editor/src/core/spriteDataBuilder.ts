@@ -1220,22 +1220,22 @@ function draw_electric_turret(
 function draw_elevated_curved_rail_a(
     e: ElevatedCurvedRailAPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_elevated_curved_rail_b(
     e: ElevatedCurvedRailBPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_elevated_half_diagonal_rail(
     e: ElevatedHalfDiagonalRailPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_elevated_straight_rail(
     e: ElevatedStraightRailPrototype
 ): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_fluid_turret(e: FluidTurretPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => [
@@ -1788,7 +1788,7 @@ function draw_radar(e: RadarPrototype): (data: IDrawData) => readonly SpriteData
     return () => e.pictures.layers
 }
 function draw_rail_ramp(e: RailRampPrototype): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return draw_rail(e as unknown as RailPrototype)
 }
 function draw_rail_signal_base(
     e: RailSignalBasePrototype
@@ -1819,7 +1819,24 @@ function draw_rail_signal_base(
     }
 }
 function draw_rail_support(e: RailSupportPrototype): (data: IDrawData) => readonly SpriteData[] {
-    throw new Error('Not implemented!')
+    return (data: IDrawData) => {
+        const structureLayers =
+            ((e.graphics_set as unknown as { structure?: { layers?: readonly SpriteData[] } })
+                .structure?.layers as readonly SpriteData[] | undefined) || []
+
+        const dir = Math.floor(((data.dir || 0) % 16) / 2)
+
+        return structureLayers.map(layer => {
+            const layerEx = layer as SpriteData & {
+                line_length?: number
+                direction_count?: number
+            }
+            const lineLength = layerEx.line_length || layerEx.direction_count || 1
+            let out = duplicateAndSetPropertyUsing(layerEx, 'x', 'width', dir % lineLength)
+            out = setPropertyUsing(out, 'y', 'height', Math.floor(dir / lineLength))
+            return out
+        })
+    }
 }
 function draw_reactor(e: ReactorPrototype): (data: IDrawData) => readonly SpriteData[] {
     return (data: IDrawData) => {

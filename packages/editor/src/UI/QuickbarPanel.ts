@@ -1,20 +1,41 @@
-import { Container, Graphics } from 'pixi.js'
+import { Container, Graphics, Text } from 'pixi.js'
 import { EditorMode } from '../containers/BlueprintContainer'
 import G from '../common/globals'
 import { Panel } from './controls/Panel'
 import { Slot } from './controls/Slot'
 import F from './controls/functions'
-import { colors } from './style'
+import { colors, styles } from './style'
 
-class QuickbarSlot extends Slot<string | undefined> {
+interface QuickbarItem {
+    name: string
+    quality?: string
+}
+
+class QuickbarSlot extends Slot<QuickbarItem | undefined> {
     public get itemName(): string {
-        return this.data
+        return this.data?.name
     }
 
-    public assignItem(itemName: string): void {
+    public get itemQuality(): string | undefined {
+        return this.data?.quality
+    }
+
+    public assignItem(itemName: string, quality?: string): void {
         if (itemName === 'blueprint') return
-        this.data = itemName
-        this.content = F.CreateIcon(itemName)
+        this.data = { name: itemName, quality }
+        const icon = new Container()
+        icon.addChild(F.CreateIcon(itemName))
+
+        if (quality) {
+            const qualityTag = new Text({
+                text: quality.charAt(0).toUpperCase(),
+                style: styles.icon.amount,
+            })
+            qualityTag.position.set(6, 6)
+            icon.addChild(qualityTag)
+        }
+
+        this.content = icon
     }
 
     public unassignItem(): void {
@@ -98,25 +119,37 @@ export class QuickbarPanel extends Panel {
 
                     if (e.button === 0) {
                         if (G.BPC.mode === EditorMode.PAINT) {
+                            if (!G.BPC.paintContainer) return
                             if (quickbarSlot.itemName) {
                                 if (quickbarSlot.itemName === G.BPC.paintContainer.getItemName()) {
                                     // UC2.5
                                     G.BPC.paintContainer.destroy()
                                 } else {
                                     // UC2
-                                    G.BPC.spawnPaintContainer(quickbarSlot.itemName)
+                                    G.BPC.spawnPaintContainer(
+                                        quickbarSlot.itemName,
+                                        0,
+                                        quickbarSlot.itemQuality
+                                    )
                                 }
                             } else {
                                 // UC1
-                                quickbarSlot.assignItem(G.BPC.paintContainer.getItemName())
+                                quickbarSlot.assignItem(
+                                    G.BPC.paintContainer.getItemName(),
+                                    G.BPC.paintContainer.getQuality()
+                                )
                             }
                         } else if (quickbarSlot.itemName) {
                             // UC4
-                            G.BPC.spawnPaintContainer(quickbarSlot.itemName)
+                            G.BPC.spawnPaintContainer(
+                                quickbarSlot.itemName,
+                                0,
+                                quickbarSlot.itemQuality
+                            )
                         } else {
                             // UC3
-                            G.UI.createInventory('Inventory', undefined, item =>
-                                quickbarSlot.assignItem(item)
+                            G.UI.createInventory('Inventory', undefined, (item, quality) =>
+                                quickbarSlot.assignItem(item, quality)
                             )
                         }
                     } else if (e.button === 2) {
@@ -135,12 +168,16 @@ export class QuickbarPanel extends Panel {
         const itemName = this.slots[slot].itemName
         if (!itemName) return
 
-        if (G.BPC.mode === EditorMode.PAINT && G.BPC.paintContainer.getItemName() === itemName) {
+        if (
+            G.BPC.mode === EditorMode.PAINT &&
+            G.BPC.paintContainer &&
+            G.BPC.paintContainer.getItemName() === itemName
+        ) {
             G.BPC.paintContainer.destroy()
             return
         }
 
-        G.BPC.spawnPaintContainer(itemName)
+        G.BPC.spawnPaintContainer(itemName, 0, this.slots[slot].itemQuality)
     }
 
     public changeActiveQuickbar(): void {

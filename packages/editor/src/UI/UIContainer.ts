@@ -57,7 +57,7 @@ export class UIContainer extends Container {
     public createInventory(
         title?: string,
         itemsFilter?: string[],
-        selectedCallBack?: (selectedItem: string) => void
+        selectedCallBack?: (selectedItem: string, quality?: string) => void
     ): InventoryDialog {
         const inv = new InventoryDialog(title, itemsFilter, selectedCallBack)
         this.dialogsContainer.addChild(inv)

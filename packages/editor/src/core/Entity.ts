@@ -835,8 +835,8 @@ export class Entity extends EventEmitter<EntityEvents> {
         return pr[
             (pr.indexOf(this.direction) +
                 (this.size.x !== this.size.y || this.type === 'underground-belt' ? 2 : 1) *
-                    (ccw ? 3 : 1)) %
-                pr.length
+                (ccw ? 3 : 1)) %
+            pr.length
         ]
     }
 

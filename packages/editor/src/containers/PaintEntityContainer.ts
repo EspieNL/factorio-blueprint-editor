@@ -11,13 +11,15 @@ export class PaintEntityContainer extends PaintContainer {
     private visualizationArea: VisualizationArea
     private directionType: DirectionType
     private direction: number
+    private readonly quality?: string
     /** This is only a reference */
     private undergroundLine: Container
 
-    public constructor(bpc: BlueprintContainer, name: string, direction: number) {
+    public constructor(bpc: BlueprintContainer, name: string, direction: number, quality?: string) {
         super(bpc, name)
 
         this.direction = direction
+        this.quality = quality
         this.directionType = FD.entities[name].type === 'loader' ? 'output' : 'input'
 
         this.visualizationArea = this.bpc.underlayContainer.create(this.name, this.position)
@@ -54,6 +56,10 @@ export class PaintEntityContainer extends PaintContainer {
 
     public override getItemName(): string {
         return Entity.getItemName(this.name)
+    }
+
+    public override getQuality(): string | undefined {
+        return this.quality
     }
 
     private checkBuildable(): void {
@@ -151,7 +157,10 @@ export class PaintEntityContainer extends PaintContainer {
             direction: this.directionType === 'input' ? this.direction : (this.direction + 8) % 16,
             directionType: this.directionType,
         })
-        this.addChild(...sprites)
+        const validSprites = sprites.filter(Boolean)
+        if (validSprites.length > 0) {
+            this.addChild(...validSprites)
+        }
     }
 
     public override moveAtCursor(): void {
@@ -233,6 +242,7 @@ export class PaintEntityContainer extends PaintContainer {
                     name: this.name,
                     position,
                     direction,
+                    quality: this.quality,
                     type:
                         fd.type === 'underground-belt' || fd.type === 'loader'
                             ? this.directionType
